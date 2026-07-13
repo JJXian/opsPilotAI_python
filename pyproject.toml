@@ -28,8 +28,9 @@ dependencies = [
     "langchain-milvus>=0.3.3",
     "langchain-text-splitters>=1.1.0",
     "langchain-mcp-adapters>=0.2.1",
-    "fastmcp>=2.14.0",
+    "fastmcp>=3.4.4",
     "langchain-qwq>=0.3.4",
+    "socksio>=1.0.0",
 ]
 
 [project.optional-dependencies]

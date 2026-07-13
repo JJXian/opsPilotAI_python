@@ -108,6 +108,7 @@ class SuperBizAgentApp {
         this.modeSelectorBtn = document.getElementById('modeSelectorBtn');
         this.modeDropdown = document.getElementById('modeDropdown');
         this.currentModeText = document.getElementById('currentModeText');
+        this.modeStatusText = document.getElementById('modeStatusText');
         this.fileInput = document.getElementById('fileInput');
         
         // 聊天区域元素
@@ -595,6 +596,14 @@ class SuperBizAgentApp {
                 'stream': '流式'
             };
             this.currentModeText.textContent = modeNames[this.currentMode] || '快速';
+        }
+
+        if (this.modeStatusText) {
+            const modeNames = {
+                'quick': '快速',
+                'stream': '流式'
+            };
+            this.modeStatusText.textContent = modeNames[this.currentMode] || '快速';
         }
         
         // 更新下拉菜单选中状态

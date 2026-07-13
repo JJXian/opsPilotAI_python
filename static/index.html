@@ -13,19 +13,25 @@
 </head>
 <body>
     <div class="app-layout">
-        <!-- 左侧边栏 -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <h2 class="sidebar-title">OpsPilotAI</h2>
+                <div class="brand-mark">OP</div>
+                <div class="brand-copy">
+                    <h2 class="sidebar-title">OpsPilotAI</h2>
+                    <span>AI 运维工作台</span>
+                </div>
             </div>
             
             <div class="sidebar-content">
-                <button class="new-chat-btn" id="newChatBtn">
-                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                    <span>新建对话</span>
-                </button>
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">工作区</div>
+                    <button class="new-chat-btn" id="newChatBtn">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        <span>新建对话</span>
+                    </button>
+                </div>
                 
                 <div class="chat-history-section">
                     <div class="history-header">
@@ -35,86 +41,118 @@
                         <!-- 历史对话列表将在这里动态生成 -->
                     </div>
                 </div>
-                
+
+                <div class="sidebar-footer">
+                    <div class="runtime-card">
+                        <span class="status-dot"></span>
+                        <div>
+                            <strong>Qwen Max</strong>
+                            <span>DashScope 在线</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </aside>
 
-        <!-- 主内容区域 -->
         <main class="main-content">
-            <button class="ai-ops-top-btn" id="aiOpsSidebarBtn">
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                <span>AI Ops</span>
-            </button>
-            <div class="chat-container">
-                <div class="welcome-greeting" id="welcomeGreeting">
-                    <p>你好！我是OpsPilotAI助手</p>
+            <header class="topbar">
+                <div class="topbar-title">
+                    <span class="breadcrumb">工作台 / 智能问答</span>
+                    <h1>运维助手</h1>
                 </div>
-                <div class="chat-messages" id="chatMessages">
+                <div class="topbar-actions">
+                    <div class="model-chip">
+                        <span class="status-dot"></span>
+                        <span>qwen-max</span>
+                    </div>
+                    <div class="model-chip">
+                        <span>知识库</span>
+                        <strong>5 文档</strong>
+                    </div>
+                    <div class="model-chip">
+                        <span>模式</span>
+                        <strong id="modeStatusText">快速</strong>
+                    </div>
+                    <button class="ai-ops-top-btn" id="aiOpsSidebarBtn">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>AI Ops</span>
+                    </button>
                 </div>
-                
-                <div class="chat-input-container">
-                    <div class="input-group-wrapper">
-                        <div class="input-wrapper">
-                            <input type="text" id="messageInput" placeholder="问问OpsPilotAI" maxlength="1000" class="message-input">
-                            <div class="input-bottom-bar">
-                                <div class="tools-btn-wrapper">
-                                    <button class="tools-btn" id="toolsBtn" title="更多选项">
-                                        <svg class="tools-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
-                                            <circle cx="19" cy="12" r="1.5" fill="currentColor"/>
-                                            <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
-                                        </svg>
-                                    </button>
-                                    <div class="tools-menu" id="toolsMenu">
-                                        <div class="tools-menu-item" id="uploadFileItem">
-                                            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                            </svg>
-                                            <span>上传文件</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="right-actions">
-                                    <div class="mode-selector-wrapper">
-                                        <button class="mode-selector-btn" id="modeSelectorBtn">
-                                            <span id="currentModeText">快速</span>
-                                            <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </header>
+
+            <section class="workspace">
+                <div class="chat-container">
+                    <div class="welcome-greeting" id="welcomeGreeting">
+                        <span class="welcome-kicker">OpsPilotAI Console</span>
+                        <p>你好，我可以帮你查询知识库、分析告警并生成运维建议。</p>
+                    </div>
+                    <div class="chat-messages" id="chatMessages">
+                    </div>
+                    
+                    <div class="chat-input-container">
+                        <div class="input-group-wrapper">
+                            <div class="input-wrapper">
+                                <input type="text" id="messageInput" placeholder="输入运维问题、告警现象或知识库查询" maxlength="1000" class="message-input">
+                                <div class="input-bottom-bar">
+                                    <div class="tools-btn-wrapper">
+                                        <button class="tools-btn" id="toolsBtn" title="更多选项">
+                                            <svg class="tools-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+                                                <circle cx="19" cy="12" r="1.5" fill="currentColor"/>
+                                                <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
                                             </svg>
                                         </button>
-                                        <div class="mode-dropdown" id="modeDropdown">
-                                            <div class="dropdown-header">选择对话方式</div>
-                                            <div class="dropdown-item active" data-mode="quick">
-                                                <div class="dropdown-item-main">
-                                                    <span>快速</span>
-                                                    <span class="badge-new">新</span>
-                                                </div>
-                                                <div class="dropdown-item-sub">快速对话</div>
-                                            </div>
-                                            <div class="dropdown-item" data-mode="stream">
-                                                <div class="dropdown-item-main">
-                                                    <span>流式</span>
-                                                </div>
-                                                <div class="dropdown-item-sub">流式对话</div>
+                                        <div class="tools-menu" id="toolsMenu">
+                                            <div class="tools-menu-item" id="uploadFileItem">
+                                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                                </svg>
+                                                <span>上传文件</span>
                                             </div>
                                         </div>
                                     </div>
-                                    <button class="send-btn-circle" id="sendButton" title="发送">
-                                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                        </svg>
-                                    </button>
+                                    <div class="right-actions">
+                                        <div class="mode-selector-wrapper">
+                                            <button class="mode-selector-btn" id="modeSelectorBtn">
+                                                <span id="currentModeText">快速</span>
+                                                <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                    <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                                </svg>
+                                            </button>
+                                            <div class="mode-dropdown" id="modeDropdown">
+                                                <div class="dropdown-header">选择对话方式</div>
+                                                <div class="dropdown-item active" data-mode="quick">
+                                                    <div class="dropdown-item-main">
+                                                        <span>快速</span>
+                                                        <span class="badge-new">默认</span>
+                                                    </div>
+                                                    <div class="dropdown-item-sub">一次性返回完整答案</div>
+                                                </div>
+                                                <div class="dropdown-item" data-mode="stream">
+                                                    <div class="dropdown-item-main">
+                                                        <span>流式</span>
+                                                    </div>
+                                                    <div class="dropdown-item-sub">边生成边输出</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button class="send-btn-circle" id="sendButton" title="发送">
+                                            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
+                        <input type="file" id="fileInput" accept=".txt,.md,.markdown" style="display: none;">
                     </div>
-                    <input type="file" id="fileInput" accept=".txt,.md,.markdown" style="display: none;">
                 </div>
-            </div>
+            </section>
         </main>
     </div>
 

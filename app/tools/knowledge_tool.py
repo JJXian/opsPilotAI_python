@@ -73,11 +73,21 @@ def format_docs(docs: List[Document]) -> str:
         
         header_str = " > ".join(headers) if headers else ""
         
-        # 构建格式化文本
+        locations = []
+        if metadata.get("_page") is not None:
+            locations.append(f"第 {metadata['_page']} 页")
+        if metadata.get("_sheet"):
+            locations.append(f"工作表：{metadata['_sheet']}")
+        if metadata.get("_row") is not None:
+            locations.append(f"第 {metadata['_row']} 行")
+        reference = " / ".join([source, *locations])
+
+        # 构建格式化文本。引用标记可直接被模型复制到最终回答中。
         formatted = f"【参考资料 {i}】"
         if header_str:
             formatted += f"\n标题: {header_str}"
         formatted += f"\n来源: {source}"
+        formatted += f"\n引用标记: 【来源：{reference}】"
         formatted += f"\n内容:\n{doc.page_content}\n"
         
         formatted_parts.append(formatted)

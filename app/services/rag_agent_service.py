@@ -20,7 +20,7 @@ from typing_extensions import TypedDict
 from langchain_qwq import ChatQwen
 
 from app.config import config
-from app.tools import DEFAULT_LOCAL_AGENT_TOOLS
+from app.tools import DEFAULT_LOCAL_AGENT_TOOLS, retrieve_knowledge
 from app.agent.mcp_client import (
     get_mcp_client_with_retry,
     load_mcp_tools_safe,
@@ -179,14 +179,44 @@ class RagAgentService:
             - 回答简洁明了，重点突出
             - 基于事实，不编造信息
             - 如有不确定的地方，明确说明
+            - 当使用知识库检索工具时，引用工具内容中提供的“引用标记”，例如【来源：值班手册.pdf / 第 2 页】
+            - 不要捏造来源；没有使用知识库时不要添加来源引用
 
             请根据用户的问题，灵活使用可用工具，提供高质量的帮助。
         """).strip()
+
+    async def _build_query_messages(
+        self,
+        question: str,
+        force_rag: bool,
+    ) -> list[BaseMessage]:
+        """构建请求消息；强制模式在调用 Agent 前先完成一次知识库检索。"""
+        messages: list[BaseMessage] = [SystemMessage(content=self.system_prompt)]
+
+        if force_rag:
+            context = await retrieve_knowledge.ainvoke({"query": question})
+            if not isinstance(context, str):
+                context = str(context)
+            messages.append(
+                SystemMessage(
+                    content=(
+                        "本次回答已启用强制知识库模式。你必须以如下最新检索内容为依据作答，"
+                        "不能使用会话中此前回答替代它，也不要补充检索内容之外的事实。"
+                        "如果资料没有答案，请明确说明“知识库中未找到足够信息”。"
+                        "每个关键结论后必须保留对应的“引用标记”。\n\n"
+                        f"最新知识库检索内容：\n{context}"
+                    )
+                )
+            )
+
+        messages.append(HumanMessage(content=question))
+        return messages
 
     async def query(
         self,
         question: str,
         session_id: str,
+        force_rag: bool = False,
     ) -> str:
         """
         非流式处理用户问题（一次性返回完整答案）
@@ -203,11 +233,7 @@ class RagAgentService:
 
             logger.info(f"[会话 {session_id}] RAG Agent 收到查询（非流式）: {question}")
 
-            # 构建消息列表（系统提示 + 用户问题）
-            messages = [
-                SystemMessage(content=self.system_prompt),
-                HumanMessage(content=question)
-            ]
+            messages = await self._build_query_messages(question, force_rag)
 
             # 构建 Agent 输入
             agent_input = {"messages": messages}
@@ -252,6 +278,7 @@ class RagAgentService:
         self,
         question: str,
         session_id: str,
+        force_rag: bool = False,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         流式处理用户问题（逐步返回答案片段）
@@ -270,11 +297,7 @@ class RagAgentService:
 
             logger.info(f"[会话 {session_id}] RAG Agent 收到查询（流式）: {question}")
 
-            # 构建消息列表（系统提示 + 用户问题）
-            messages = [
-                SystemMessage(content=self.system_prompt),
-                HumanMessage(content=question)
-            ]
+            messages = await self._build_query_messages(question, force_rag)
 
             # 构建 Agent 输入
             agent_input = {"messages": messages}

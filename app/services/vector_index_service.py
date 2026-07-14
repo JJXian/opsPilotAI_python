@@ -153,11 +153,8 @@ class VectorIndexService:
         logger.info(f"开始索引文件: {path}")
 
         try:
-            # 1. 删除该文件的旧数据（如果存在）
+            # 1. 先读取并分割新文件。解析失败时保留原有索引，避免覆盖更新后知识库为空。
             normalized_path = path.as_posix()
-            vector_store_manager.delete_by_source(normalized_path)
-
-            # 2. 按文件类型读取并分割。DOCX、PDF、XLSX 都不能使用 read_text()。
             if path.suffix.lower() == ".docx":
                 documents = document_splitter_service.split_docx(normalized_path)
             elif path.suffix.lower() == ".pdf":
@@ -170,8 +167,9 @@ class VectorIndexService:
                 documents = document_splitter_service.split_document(content, normalized_path)
             logger.info(f"文档分割完成: {file_path} -> {len(documents)} 个分片")
 
-            # 3. 添加文档到向量存储
+            # 2. 新内容已验证可解析后，再替换该源文件的旧向量。
             if documents:
+                vector_store_manager.delete_by_source(normalized_path)
                 vector_store_manager.add_documents(documents)
                 logger.info(f"文件索引完成: {file_path}, 共 {len(documents)} 个分片")
             else:

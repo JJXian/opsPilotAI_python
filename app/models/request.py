@@ -11,13 +11,15 @@ class ChatRequest(BaseModel):
 
     id: str = Field(..., description="会话 ID", alias="Id")
     question: str = Field(..., description="用户问题", alias="Question")
+    force_rag: bool = Field(False, description="是否强制从知识库检索", alias="forceRag")
 
     class Config:
         populate_by_name = True
         json_schema_extra = {
             "example": {
                 "Id": "session-123",
-                "Question": "什么是向量数据库？"
+                "Question": "什么是向量数据库？",
+                "forceRag": False,
             }
         }
 

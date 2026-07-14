@@ -8,6 +8,10 @@ class SuperBizAgentApp {
         this.currentChatHistory = []; // 当前对话的消息历史
         this.chatHistories = this.loadChatHistories(); // 所有历史对话
         this.isCurrentChatFromHistory = false; // 标记当前对话是否是从历史记录加载的
+        this.forceRag = false;
+        this.pendingReplaceDocument = null;
+        this.currentKnowledgePage = 1;
+        this.knowledgePageSize = 10;
         
         this.initializeElements();
         this.bindEvents();
@@ -15,6 +19,7 @@ class SuperBizAgentApp {
         this.initMarkdown();
         this.checkAndSetCentered();
         this.renderChatHistory();
+        this.refreshKnowledgeStats();
     }
 
     // 初始化Markdown配置
@@ -105,12 +110,26 @@ class SuperBizAgentApp {
         this.toolsBtn = document.getElementById('toolsBtn');
         this.toolsMenu = document.getElementById('toolsMenu');
         this.uploadFileItem = document.getElementById('uploadFileItem');
+        this.manageKnowledgeMenuItem = document.getElementById('manageKnowledgeMenuItem');
+        this.manageKnowledgeBtn = document.getElementById('manageKnowledgeBtn');
         this.modeSelectorBtn = document.getElementById('modeSelectorBtn');
         this.modeDropdown = document.getElementById('modeDropdown');
         this.currentModeText = document.getElementById('currentModeText');
         this.modeStatusText = document.getElementById('modeStatusText');
         this.knowledgeDocumentCount = document.getElementById('knowledgeDocumentCount');
         this.fileInput = document.getElementById('fileInput');
+        this.replaceFileInput = document.getElementById('replaceFileInput');
+        this.forceRagToggle = document.getElementById('forceRagToggle');
+
+        // 知识库管理面板
+        this.knowledgeModal = document.getElementById('knowledgeModal');
+        this.knowledgeModalBackdrop = document.getElementById('knowledgeModalBackdrop');
+        this.closeKnowledgeBtn = document.getElementById('closeKnowledgeBtn');
+        this.refreshKnowledgeBtn = document.getElementById('refreshKnowledgeBtn');
+        this.knowledgeDocumentList = document.getElementById('knowledgeDocumentList');
+        this.knowledgeEmptyState = document.getElementById('knowledgeEmptyState');
+        this.knowledgeManagerSummary = document.getElementById('knowledgeManagerSummary');
+        this.knowledgePagination = document.getElementById('knowledgePagination');
         
         // 聊天区域元素
         this.chatMessages = document.getElementById('chatMessages');
@@ -192,6 +211,30 @@ class SuperBizAgentApp {
                 this.closeToolsMenu();
             });
         }
+
+        [this.manageKnowledgeBtn, this.manageKnowledgeMenuItem].forEach((button) => {
+            if (button) {
+                button.addEventListener('click', () => {
+                    this.closeToolsMenu();
+                    this.openKnowledgeManager();
+                });
+            }
+        });
+
+        if (this.closeKnowledgeBtn) {
+            this.closeKnowledgeBtn.addEventListener('click', () => this.closeKnowledgeManager());
+        }
+        if (this.knowledgeModalBackdrop) {
+            this.knowledgeModalBackdrop.addEventListener('click', () => this.closeKnowledgeManager());
+        }
+        if (this.refreshKnowledgeBtn) {
+            this.refreshKnowledgeBtn.addEventListener('click', () => this.refreshKnowledgeDocuments());
+        }
+        if (this.forceRagToggle) {
+            this.forceRagToggle.addEventListener('change', () => {
+                this.forceRag = this.forceRagToggle.checked;
+            });
+        }
         
         // 点击外部关闭工具菜单
         document.addEventListener('click', (e) => {
@@ -204,6 +247,9 @@ class SuperBizAgentApp {
         
         if (this.fileInput) {
             this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+        }
+        if (this.replaceFileInput) {
+            this.replaceFileInput.addEventListener('change', (e) => this.handleReplaceFileSelect(e));
         }
     }
 
@@ -699,7 +745,8 @@ class SuperBizAgentApp {
                 },
                 body: JSON.stringify({
                     Id: this.sessionId,
-                    Question: message
+                    Question: message,
+                    forceRag: this.forceRag,
                 })
             });
 
@@ -755,7 +802,8 @@ class SuperBizAgentApp {
                 },
                 body: JSON.stringify({
                     Id: this.sessionId,
-                    Question: message
+                    Question: message,
+                    forceRag: this.forceRag,
                 })
             });
 
@@ -1140,6 +1188,240 @@ class SuperBizAgentApp {
         }
     }
 
+    openKnowledgeManager() {
+        if (!this.knowledgeModal) return;
+        this.knowledgeModal.classList.add('is-open');
+        this.knowledgeModal.setAttribute('aria-hidden', 'false');
+        this.refreshKnowledgeDocuments(1);
+    }
+
+    closeKnowledgeManager() {
+        if (!this.knowledgeModal) return;
+        this.knowledgeModal.classList.remove('is-open');
+        this.knowledgeModal.setAttribute('aria-hidden', 'true');
+    }
+
+    async refreshKnowledgeDocuments(page = this.currentKnowledgePage) {
+        if (!this.knowledgeDocumentList) return;
+        this.currentKnowledgePage = page;
+        this.knowledgeDocumentList.innerHTML = '<tr><td class="knowledge-loading" colspan="6">正在加载文档...</td></tr>';
+        if (this.knowledgeEmptyState) this.knowledgeEmptyState.hidden = true;
+        if (this.knowledgePagination) this.knowledgePagination.hidden = true;
+
+        try {
+            const response = await fetch(
+                `${this.apiBaseUrl}/knowledge/documents?page=${this.currentKnowledgePage}&page_size=${this.knowledgePageSize}`,
+            );
+            const data = await response.json();
+            if (!response.ok || data.code !== 200) {
+                throw new Error(data.detail || data.message || `HTTP错误: ${response.status}`);
+            }
+            const documents = data?.data?.documents || [];
+            const pagination = data?.data?.pagination || {};
+            this.currentKnowledgePage = pagination.page || 1;
+            this.renderKnowledgeDocuments(documents);
+            this.renderKnowledgePagination(pagination);
+            if (this.knowledgeManagerSummary) {
+                this.knowledgeManagerSummary.textContent = `共 ${pagination.total || 0} 文档`;
+            }
+            await this.refreshKnowledgeStats();
+        } catch (error) {
+            console.error('获取知识库文档失败:', error);
+            this.knowledgeDocumentList.innerHTML = '<tr><td class="knowledge-loading" colspan="6">文档列表加载失败</td></tr>';
+            if (this.knowledgeManagerSummary) this.knowledgeManagerSummary.textContent = '加载失败';
+        }
+    }
+
+    renderKnowledgePagination(pagination) {
+        if (!this.knowledgePagination) return;
+        this.knowledgePagination.innerHTML = '';
+        const totalPages = pagination.total_pages || 1;
+        const currentPage = pagination.page || 1;
+        const total = pagination.total || 0;
+        if (total <= this.knowledgePageSize) {
+            this.knowledgePagination.hidden = true;
+            return;
+        }
+
+        this.knowledgePagination.hidden = false;
+        const totalLabel = document.createElement('span');
+        totalLabel.className = 'knowledge-pagination-summary';
+        totalLabel.textContent = `第 ${currentPage} / ${totalPages} 页，共 ${total} 个文档`;
+        this.knowledgePagination.appendChild(totalLabel);
+
+        const controls = document.createElement('div');
+        controls.className = 'knowledge-pagination-controls';
+        controls.appendChild(this.createPaginationButton('上一页', 'prev', () => this.refreshKnowledgeDocuments(currentPage - 1), currentPage === 1));
+        controls.appendChild(this.createPaginationButton(`${currentPage}`, 'page', () => {}, true, true));
+        controls.appendChild(this.createPaginationButton('下一页', 'next', () => this.refreshKnowledgeDocuments(currentPage + 1), currentPage === totalPages));
+        this.knowledgePagination.appendChild(controls);
+    }
+
+    createPaginationButton(label, type, onClick, disabled = false, active = false) {
+        const button = document.createElement('button');
+        button.className = `knowledge-page-btn${active ? ' active' : ''}`;
+        button.type = 'button';
+        button.title = label;
+        button.disabled = disabled;
+        button.textContent = type === 'prev' ? '‹' : type === 'next' ? '›' : label;
+        button.addEventListener('click', onClick);
+        return button;
+    }
+
+    renderKnowledgeDocuments(knowledgeDocuments) {
+        if (!this.knowledgeDocumentList) return;
+        this.knowledgeDocumentList.innerHTML = '';
+        if (this.knowledgeEmptyState) this.knowledgeEmptyState.hidden = knowledgeDocuments.length !== 0;
+        if (!knowledgeDocuments.length) return;
+
+        knowledgeDocuments.forEach((knowledgeDocument) => {
+            const row = document.createElement('tr');
+            const documentCell = document.createElement('td');
+            documentCell.className = 'knowledge-document-name';
+            const name = document.createElement('strong');
+            name.textContent = knowledgeDocument.filename;
+            documentCell.appendChild(name);
+            if (knowledgeDocument.size !== null && knowledgeDocument.size !== undefined) {
+                const meta = document.createElement('span');
+                meta.textContent = this.formatFileSize(knowledgeDocument.size);
+                documentCell.appendChild(meta);
+            }
+            row.appendChild(documentCell);
+
+            row.appendChild(this.createKnowledgeCell((knowledgeDocument.extension || '-').toUpperCase(), 'knowledge-type'));
+            row.appendChild(this.createKnowledgeStatusCell(knowledgeDocument.status));
+            const indexDetail = knowledgeDocument.page_count
+                ? `${knowledgeDocument.chunk_count} / ${knowledgeDocument.page_count} 页`
+                : `${knowledgeDocument.chunk_count || 0}`;
+            row.appendChild(this.createKnowledgeCell(indexDetail));
+            row.appendChild(this.createKnowledgeCell(this.formatKnowledgeDate(knowledgeDocument.updated_at)));
+
+            const actions = document.createElement('td');
+            actions.className = 'knowledge-row-actions';
+            const canUseFile = knowledgeDocument.status !== 'missing';
+            actions.appendChild(this.createKnowledgeAction('重新索引', 'refresh', () => this.reindexKnowledgeDocument(knowledgeDocument), !canUseFile));
+            actions.appendChild(this.createKnowledgeAction('覆盖更新', 'upload', () => this.chooseReplacementDocument(knowledgeDocument), !canUseFile));
+            actions.appendChild(this.createKnowledgeAction('删除', 'delete', () => this.deleteKnowledgeDocument(knowledgeDocument), false, true));
+            row.appendChild(actions);
+            this.knowledgeDocumentList.appendChild(row);
+        });
+    }
+
+    createKnowledgeCell(value, className = '') {
+        const cell = document.createElement('td');
+        if (className) cell.className = className;
+        cell.textContent = value;
+        return cell;
+    }
+
+    createKnowledgeStatusCell(status) {
+        const cell = document.createElement('td');
+        const label = document.createElement('span');
+        label.className = `knowledge-status ${status}`;
+        label.textContent = { indexed: '已索引', unindexed: '未索引', missing: '源文件缺失' }[status] || '未知';
+        cell.appendChild(label);
+        return cell;
+    }
+
+    createKnowledgeAction(label, icon, onClick, disabled = false, danger = false) {
+        const button = document.createElement('button');
+        button.className = `knowledge-action-btn${danger ? ' danger' : ''}`;
+        button.type = 'button';
+        button.title = label;
+        button.setAttribute('aria-label', label);
+        button.disabled = disabled;
+        button.innerHTML = this.getKnowledgeActionIcon(icon);
+        button.addEventListener('click', onClick);
+        return button;
+    }
+
+    getKnowledgeActionIcon(icon) {
+        const icons = {
+            refresh: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 11A8 8 0 1 0 21.5 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M20 4V11H13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+            upload: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V4M8 8L12 4L16 8M5 20H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+            delete: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7H20M10 11V17M14 11V17M6 7L7 20H17L18 7M9 7V4H15V7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+        };
+        return icons[icon] || '';
+    }
+
+    formatKnowledgeDate(value) {
+        if (!value) return '-';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '-';
+        return date.toLocaleString('zh-CN', { hour12: false });
+    }
+
+    async reindexKnowledgeDocument(document) {
+        await this.runKnowledgeDocumentAction(
+            document,
+            '重新索引完成',
+            `${this.apiBaseUrl}/knowledge/documents/${encodeURIComponent(document.filename)}/reindex`,
+            { method: 'POST' },
+        );
+    }
+
+    chooseReplacementDocument(document) {
+        if (!this.replaceFileInput) return;
+        this.pendingReplaceDocument = document;
+        this.replaceFileInput.value = '';
+        this.replaceFileInput.click();
+    }
+
+    async handleReplaceFileSelect(event) {
+        const file = event.target.files[0];
+        const document = this.pendingReplaceDocument;
+        this.pendingReplaceDocument = null;
+        if (!file || !document) return;
+        if (!this.validateFileType(file)) {
+            this.showNotification('不支持的文件类型', 'error');
+            return;
+        }
+
+        const currentExtension = document.extension.toLowerCase();
+        if (!file.name.toLowerCase().endsWith(`.${currentExtension}`)) {
+            this.showNotification(`覆盖更新需要 .${currentExtension} 文件`, 'warning');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        await this.runKnowledgeDocumentAction(
+            document,
+            '覆盖更新完成',
+            `${this.apiBaseUrl}/knowledge/documents/${encodeURIComponent(document.filename)}/replace`,
+            { method: 'POST', body: formData },
+        );
+    }
+
+    async deleteKnowledgeDocument(document) {
+        const confirmed = window.confirm(`确认删除“${document.filename}”及其知识库索引吗？`);
+        if (!confirmed) return;
+        await this.runKnowledgeDocumentAction(
+            document,
+            '文档已删除',
+            `${this.apiBaseUrl}/knowledge/documents/${encodeURIComponent(document.filename)}`,
+            { method: 'DELETE' },
+        );
+    }
+
+    async runKnowledgeDocumentAction(document, successMessage, url, options) {
+        this.showUploadOverlay(true, document.filename);
+        try {
+            const response = await fetch(url, options);
+            const data = await response.json();
+            if (!response.ok || data.code !== 200) {
+                throw new Error(data.detail || data.message || `HTTP错误: ${response.status}`);
+            }
+            this.showNotification(`${document.filename}${successMessage}`, 'success');
+            await this.refreshKnowledgeDocuments();
+        } catch (error) {
+            console.error('知识库文档操作失败:', error);
+            this.showNotification(`操作失败: ${error.message}`, 'error');
+        } finally {
+            this.showUploadOverlay(false);
+        }
+    }
+
     // 上传文件到知识库
     async uploadFile(file) {
         // 再次验证文件类型（双重保险）
@@ -1179,6 +1461,9 @@ class SuperBizAgentApp {
 
             if ((data.code === 200 || data.message === 'success') && data.data) {
                 await this.refreshKnowledgeStats();
+                if (this.knowledgeModal?.classList.contains('is-open')) {
+                    await this.refreshKnowledgeDocuments();
+                }
                 // 在聊天界面显示上传成功消息
                 const successMessage = `${file.name} 上传到知识库成功`;
                 this.addMessage('assistant', successMessage, false, true);

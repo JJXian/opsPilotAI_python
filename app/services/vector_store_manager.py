@@ -1,6 +1,7 @@
 """向量存储管理器 - 封装 Milvus VectorStore 操作"""
 
-from typing import Any, List
+from pathlib import Path
+from typing import Any, Iterator, List
 
 from langchain_core.documents import Document
 from langchain_milvus import Milvus
@@ -92,7 +93,7 @@ class VectorStoreManager:
             logger.error(f"添加文档失败: {e}")
             raise
 
-    def delete_by_source(self, file_path: str) -> int:
+    def delete_by_source(self, file_path: str, *, ignore_errors: bool = True) -> int:
         """
         删除指定文件的所有文档
 
@@ -118,13 +119,13 @@ class VectorStoreManager:
             
         except Exception as e:
             logger.warning(f"删除旧数据失败 (可能是首次索引): {e}")
-            return 0
+            if ignore_errors:
+                return 0
+            raise
 
-    def get_knowledge_stats(self) -> dict[str, int]:
-        """统计已成功入库的源文件数和文本分片数。"""
+    def _iter_document_metadata(self) -> Iterator[dict[str, Any]]:
+        """遍历 collection 中的文档元数据，供统计和管理接口复用。"""
         collection = milvus_manager.get_collection()
-        sources: set[str] = set()
-        chunk_count = 0
         iterator: Any = collection.query_iterator(
             expr='id != ""',
             output_fields=["metadata"],
@@ -134,19 +135,58 @@ class VectorStoreManager:
 
         try:
             while batch := iterator.next():
-                chunk_count += len(batch)
                 for entity in batch:
                     metadata = entity.get("metadata") or {}
-                    source = metadata.get("_source")
-                    if source:
-                        sources.add(str(source))
+                    if isinstance(metadata, dict):
+                        yield metadata
         finally:
             iterator.close()
 
+    def list_indexed_documents(self) -> list[dict[str, Any]]:
+        """按源文件聚合已入库分片，返回知识库管理页需要的索引信息。"""
+        documents: dict[str, dict[str, Any]] = {}
+
+        for metadata in self._iter_document_metadata():
+            source = metadata.get("_source")
+            if not source:
+                continue
+
+            source = str(source)
+            document = documents.setdefault(
+                source,
+                {
+                    "source": source,
+                    "file_name": metadata.get("_file_name") or Path(source).name,
+                    "extension": str(
+                        metadata.get("_extension") or Path(source).suffix.lower()
+                    ).lstrip("."),
+                    "chunk_count": 0,
+                    "pages": set(),
+                    "sheets": set(),
+                },
+            )
+            document["chunk_count"] += 1
+            if metadata.get("_page") is not None:
+                document["pages"].add(metadata["_page"])
+            if metadata.get("_sheet"):
+                document["sheets"].add(str(metadata["_sheet"]))
+
+        results = []
+        for document in documents.values():
+            document["page_count"] = len(document.pop("pages"))
+            document["sheets"] = sorted(document["sheets"])
+            results.append(document)
+        return results
+
+    def get_knowledge_stats(self) -> dict[str, int]:
+        """统计已成功入库的源文件数和文本分片数。"""
+        documents = self.list_indexed_documents()
+        chunk_count = sum(document["chunk_count"] for document in documents)
+
         logger.info(
-            f"知识库统计完成: 文档数={len(sources)}, 文本分片数={chunk_count}"
+            f"知识库统计完成: 文档数={len(documents)}, 文本分片数={chunk_count}"
         )
-        return {"document_count": len(sources), "chunk_count": chunk_count}
+        return {"document_count": len(documents), "chunk_count": chunk_count}
 
     def get_vector_store(self) -> Milvus:
         """

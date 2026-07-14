@@ -363,6 +363,33 @@ button {
     transform: translateY(-1px);
 }
 
+.knowledge-manage-btn {
+    height: 36px;
+    padding: 0 11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #ffffff;
+    color: #344054;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.knowledge-manage-btn svg {
+    width: 17px;
+    height: 17px;
+}
+
+.knowledge-manage-btn:hover {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary);
+}
+
 .workspace {
     flex: 1;
     min-height: 0;
@@ -698,6 +725,60 @@ button {
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+.force-rag-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    user-select: none;
+}
+
+.force-rag-toggle input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+
+.toggle-track {
+    width: 30px;
+    height: 18px;
+    position: relative;
+    flex: 0 0 30px;
+    border-radius: 9px;
+    background: #cbd5e1;
+    transition: background 0.18s ease;
+}
+
+.toggle-track::after {
+    content: "";
+    width: 14px;
+    height: 14px;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.22);
+    transition: transform 0.18s ease;
+}
+
+.force-rag-toggle input:checked + .toggle-track {
+    background: var(--primary);
+}
+
+.force-rag-toggle input:checked + .toggle-track::after {
+    transform: translateX(12px);
+}
+
+.force-rag-toggle input:focus-visible + .toggle-track {
+    outline: 3px solid rgba(64, 158, 255, 0.24);
+    outline-offset: 2px;
 }
 
 .tools-btn,
@@ -1039,6 +1120,306 @@ button {
     to { transform: rotate(360deg); }
 }
 
+.knowledge-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.18s ease, visibility 0.18s ease;
+}
+
+.knowledge-modal.is-open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.knowledge-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.42);
+    backdrop-filter: blur(3px);
+}
+
+.knowledge-panel {
+    width: min(1060px, 100%);
+    max-height: min(720px, calc(100vh - 48px));
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    transform: translateY(8px);
+    transition: transform 0.18s ease;
+}
+
+.knowledge-modal.is-open .knowledge-panel {
+    transform: translateY(0);
+}
+
+.knowledge-panel-header {
+    min-height: 76px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.panel-kicker {
+    display: block;
+    color: var(--primary);
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.knowledge-panel-header h2 {
+    margin-top: 3px;
+    color: var(--text);
+    font-size: 19px;
+    line-height: 1.25;
+}
+
+.knowledge-panel-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.knowledge-summary {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.icon-btn,
+.knowledge-action-btn {
+    display: grid;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+
+.icon-btn {
+    width: 32px;
+    height: 32px;
+}
+
+.icon-btn svg,
+.knowledge-action-btn svg {
+    width: 17px;
+    height: 17px;
+}
+
+.icon-btn:hover,
+.knowledge-action-btn:hover:not(:disabled) {
+    border-color: var(--border);
+    background: var(--bg-soft);
+    color: var(--primary);
+}
+
+.knowledge-table-wrap {
+    min-height: 220px;
+    overflow: auto;
+}
+
+.knowledge-table {
+    width: 100%;
+    min-width: 780px;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.knowledge-table th,
+.knowledge-table td {
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--border);
+    color: #475467;
+    font-size: 13px;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.knowledge-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--bg-soft);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.knowledge-table th:nth-child(1) { width: 32%; }
+.knowledge-table th:nth-child(2) { width: 9%; }
+.knowledge-table th:nth-child(3) { width: 15%; }
+.knowledge-table th:nth-child(4) { width: 12%; }
+.knowledge-table th:nth-child(5) { width: 20%; }
+.knowledge-table th:nth-child(6) { width: 12%; }
+
+.knowledge-table tbody tr:hover {
+    background: #fbfdff;
+}
+
+.knowledge-document-name strong,
+.knowledge-document-name span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.knowledge-document-name strong {
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.knowledge-document-name span {
+    margin-top: 2px;
+    color: var(--muted-2);
+    font-size: 11px;
+}
+
+.knowledge-type {
+    color: var(--primary) !important;
+    font-size: 11px !important;
+    font-weight: 800;
+}
+
+.knowledge-status {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 0 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.knowledge-status.indexed {
+    background: #ecfdf3;
+    color: #027a48;
+}
+
+.knowledge-status.unindexed {
+    background: #fffaeb;
+    color: #b54708;
+}
+
+.knowledge-status.missing {
+    background: #fef3f2;
+    color: #b42318;
+}
+
+.knowledge-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.knowledge-action-btn {
+    width: 30px;
+    height: 30px;
+}
+
+.knowledge-action-btn.danger:hover:not(:disabled) {
+    border-color: #fecaca;
+    background: #fef2f2;
+    color: var(--danger);
+}
+
+.knowledge-action-btn:disabled {
+    color: #cbd5e1;
+    cursor: not-allowed;
+}
+
+.knowledge-loading,
+.knowledge-empty {
+    padding: 44px 16px !important;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center !important;
+}
+
+.knowledge-pagination {
+    min-height: 54px;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-top: 1px solid var(--border);
+    background: #ffffff;
+}
+
+.knowledge-pagination-summary {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.knowledge-pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.knowledge-page-btn {
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #ffffff;
+    color: #475467;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.knowledge-page-btn:hover:not(:disabled) {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.knowledge-page-btn.active {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary);
+}
+
+.knowledge-page-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.knowledge-empty {
+    display: grid;
+    place-items: center;
+    min-height: 160px;
+}
+
+.knowledge-empty[hidden] {
+    display: none !important;
+}
+
 @media (max-width: 760px) {
     body {
         overflow: auto;
@@ -1132,5 +1513,25 @@ button {
 
     .mode-dropdown {
         right: -44px;
+    }
+
+    .knowledge-modal {
+        padding: 10px;
+    }
+
+    .knowledge-panel {
+        max-height: calc(100vh - 20px);
+    }
+
+    .knowledge-panel-header {
+        padding: 14px;
+    }
+
+    .knowledge-summary {
+        display: none;
+    }
+
+    .force-rag-toggle > span:last-child {
+        display: none;
     }
 }

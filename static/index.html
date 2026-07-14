@@ -69,6 +69,13 @@
                         <span>知识库</span>
                         <strong id="knowledgeDocumentCount">-- 文档</strong>
                     </div>
+                    <button class="knowledge-manage-btn" id="manageKnowledgeBtn" title="知识库管理">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <path d="M4 5.5C4 4.67 4.67 4 5.5 4H10L12 6H18.5C19.33 6 20 6.67 20 7.5V18.5C20 19.33 19.33 20 18.5 20H5.5C4.67 20 4 19.33 4 18.5V5.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                            <path d="M8 11H16M8 15H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        <span>知识库</span>
+                    </button>
                     <div class="model-chip">
                         <span>模式</span>
                         <strong id="modeStatusText">快速</strong>
@@ -113,8 +120,20 @@
                                                 </svg>
                                                 <span>上传文件</span>
                                             </div>
+                                            <div class="tools-menu-item" id="manageKnowledgeMenuItem">
+                                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                    <path d="M4 5.5C4 4.67 4.67 4 5.5 4H10L12 6H18.5C19.33 6 20 6.67 20 7.5V18.5C20 19.33 19.33 20 18.5 20H5.5C4.67 20 4 19.33 4 18.5V5.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                                                    <path d="M8 11H16M8 15H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                                </svg>
+                                                <span>知识库管理</span>
+                                            </div>
                                         </div>
                                     </div>
+                                    <label class="force-rag-toggle" title="强制使用知识库检索">
+                                        <input type="checkbox" id="forceRagToggle">
+                                        <span class="toggle-track" aria-hidden="true"></span>
+                                        <span>知识库优先</span>
+                                    </label>
                                     <div class="right-actions">
                                         <div class="mode-selector-wrapper">
                                             <button class="mode-selector-btn" id="modeSelectorBtn">
@@ -150,10 +169,49 @@
                             </div>
                         </div>
                         <input type="file" id="fileInput" accept=".txt,.md,.docx,.pdf,.xlsx" style="display: none;">
+                        <input type="file" id="replaceFileInput" accept=".txt,.md,.docx,.pdf,.xlsx" style="display: none;">
                     </div>
                 </div>
             </section>
         </main>
+    </div>
+
+    <div class="knowledge-modal" id="knowledgeModal" aria-hidden="true">
+        <div class="knowledge-modal-backdrop" id="knowledgeModalBackdrop"></div>
+        <section class="knowledge-panel" role="dialog" aria-modal="true" aria-labelledby="knowledgeManagerTitle">
+            <header class="knowledge-panel-header">
+                <div>
+                    <span class="panel-kicker">KNOWLEDGE BASE</span>
+                    <h2 id="knowledgeManagerTitle">知识库管理</h2>
+                </div>
+                <div class="knowledge-panel-header-actions">
+                    <span class="knowledge-summary" id="knowledgeManagerSummary">加载中</span>
+                    <button class="icon-btn" id="refreshKnowledgeBtn" title="刷新文档列表" aria-label="刷新文档列表">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M20 11A8 8 0 1 0 21.5 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M20 4V11H13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </button>
+                    <button class="icon-btn" id="closeKnowledgeBtn" title="关闭" aria-label="关闭">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                    </button>
+                </div>
+            </header>
+            <div class="knowledge-table-wrap">
+                <table class="knowledge-table">
+                    <thead>
+                        <tr>
+                            <th>文档</th>
+                            <th>类型</th>
+                            <th>索引状态</th>
+                            <th>分片</th>
+                            <th>更新时间</th>
+                            <th class="knowledge-actions-heading">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="knowledgeDocumentList"></tbody>
+                </table>
+                <div class="knowledge-empty" id="knowledgeEmptyState" hidden>暂无知识库文档</div>
+            </div>
+            <footer class="knowledge-pagination" id="knowledgePagination" hidden></footer>
+        </section>
     </div>
 
     <!-- 加载遮罩层 -->

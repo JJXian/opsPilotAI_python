@@ -14,6 +14,7 @@ from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from loguru import logger
 from pypdf import PdfReader
+from python_calamine import CalamineWorkbook
 
 from app.config import config
 
@@ -22,6 +23,7 @@ class DocumentSplitterService:
     """文档分割服务 - 使用 LangChain 的分割器"""
 
     MAX_PDF_PAGES = 200
+    MAX_XLSX_ROWS = 10_000
 
     def __init__(self):
         """初始化文档分割服务"""
@@ -206,6 +208,98 @@ class DocumentSplitterService:
         except Exception as e:
             logger.error(f"PDF 解析失败: {file_path}, 错误: {e}")
             raise
+
+    def split_xlsx(self, file_path: str) -> List[Document]:
+        """将 XLSX 的每个工作表数据行转为可检索的字段和值记录。"""
+        try:
+            workbook = CalamineWorkbook.from_path(file_path)
+            documents: list[Document] = []
+            indexed_rows = 0
+
+            for sheet_name in workbook.sheet_names:
+                rows = workbook.get_sheet_by_name(sheet_name).to_python()
+                header_row_index, headers = self._get_xlsx_headers(rows)
+                if header_row_index is None:
+                    logger.warning(f"XLSX 工作表没有可用内容，跳过: {sheet_name}")
+                    continue
+
+                for row_index, row in enumerate(
+                    rows[header_row_index + 1 :], start=header_row_index + 2
+                ):
+                    values = [self._format_xlsx_value(value) for value in row]
+                    if not any(values):
+                        continue
+
+                    indexed_rows += 1
+                    if indexed_rows > self.MAX_XLSX_ROWS:
+                        raise ValueError(
+                            f"XLSX 数据行超过限制（最多 {self.MAX_XLSX_ROWS} 行），"
+                            "请拆分文件后再上传"
+                        )
+
+                    fields = [
+                        f"{header}：{values[index]}"
+                        for index, header in enumerate(headers)
+                        if index < len(values) and values[index]
+                    ]
+                    if not fields:
+                        continue
+
+                    row_text = f"工作表：{sheet_name}\n" + "\n".join(fields)
+                    row_documents = self.text_splitter.create_documents(
+                        texts=[row_text],
+                        metadatas=[
+                            {
+                                "_source": file_path,
+                                "_extension": ".xlsx",
+                                "_file_name": Path(file_path).name,
+                                "_sheet": sheet_name,
+                                "_row": row_index,
+                            }
+                        ],
+                    )
+                    documents.extend(row_documents)
+
+            if not documents:
+                raise ValueError("未从 XLSX 提取到可检索数据，请确认工作表包含表头和数据行")
+
+            logger.info(
+                f"XLSX 分割完成: {file_path} -> {len(documents)} 个分片，"
+                f"共索引 {indexed_rows} 行"
+            )
+            return documents
+        except Exception as e:
+            logger.error(f"XLSX 解析失败: {file_path}, 错误: {e}")
+            raise
+
+    @staticmethod
+    def _get_xlsx_headers(rows: list[list[object]]) -> tuple[int | None, list[str]]:
+        """取首个非空行作为表头，并为缺失或重复字段名生成稳定名称。"""
+        for index, row in enumerate(rows):
+            raw_headers = [
+                DocumentSplitterService._format_xlsx_value(value) for value in row
+            ]
+            if not any(raw_headers):
+                continue
+
+            seen: dict[str, int] = {}
+            headers: list[str] = []
+            for column, value in enumerate(raw_headers, start=1):
+                base_name = value or f"列{column}"
+                seen[base_name] = seen.get(base_name, 0) + 1
+                suffix = f"_{seen[base_name]}" if seen[base_name] > 1 else ""
+                headers.append(f"{base_name}{suffix}")
+            return index, headers
+        return None, []
+
+    @staticmethod
+    def _format_xlsx_value(value: object) -> str:
+        """将 Excel 单元格值规整为适合嵌入的文本。"""
+        if value is None:
+            return ""
+        if isinstance(value, bool):
+            return "是" if value else "否"
+        return str(value).strip()
 
     @staticmethod
     def _iter_docx_blocks(document: DocxDocumentType) -> Iterator[Union[Paragraph, Table]]:

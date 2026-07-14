@@ -9,7 +9,7 @@ from loguru import logger
 from app.services.document_splitter_service import document_splitter_service
 from app.services.vector_store_manager import vector_store_manager
 
-SUPPORTED_FILE_SUFFIXES = {".txt", ".md", ".docx", ".pdf"}
+SUPPORTED_FILE_SUFFIXES = {".txt", ".md", ".docx", ".pdf", ".xlsx"}
 
 
 class IndexingResult:
@@ -157,11 +157,13 @@ class VectorIndexService:
             normalized_path = path.as_posix()
             vector_store_manager.delete_by_source(normalized_path)
 
-            # 2. 按文件类型读取并分割。DOCX、PDF 都不能使用 read_text()。
+            # 2. 按文件类型读取并分割。DOCX、PDF、XLSX 都不能使用 read_text()。
             if path.suffix.lower() == ".docx":
                 documents = document_splitter_service.split_docx(normalized_path)
             elif path.suffix.lower() == ".pdf":
                 documents = document_splitter_service.split_pdf(normalized_path)
+            elif path.suffix.lower() == ".xlsx":
+                documents = document_splitter_service.split_xlsx(normalized_path)
             else:
                 content = path.read_text(encoding="utf-8")
                 logger.info(f"读取文件: {path}, 内容长度: {len(content)} 字符")

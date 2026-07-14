@@ -9,6 +9,8 @@ from loguru import logger
 from app.services.document_splitter_service import document_splitter_service
 from app.services.vector_store_manager import vector_store_manager
 
+SUPPORTED_FILE_SUFFIXES = {".txt", ".md", ".docx"}
+
 
 class IndexingResult:
     """索引结果类"""
@@ -88,7 +90,11 @@ class VectorIndexService:
             result.directory_path = str(dir_path)
 
             # 获取所有支持的文件
-            files = list(dir_path.glob("*.txt")) + list(dir_path.glob("*.md"))
+            files = [
+                path
+                for path in dir_path.iterdir()
+                if path.is_file() and path.suffix.lower() in SUPPORTED_FILE_SUFFIXES
+            ]
 
             if not files:
                 logger.warning(f"目录中没有找到支持的文件: {target_path}")
@@ -147,19 +153,20 @@ class VectorIndexService:
         logger.info(f"开始索引文件: {path}")
 
         try:
-            # 1. 读取文件内容
-            content = path.read_text(encoding="utf-8")
-            logger.info(f"读取文件: {path}, 内容长度: {len(content)} 字符")
-
-            # 2. 删除该文件的旧数据（如果存在）
+            # 1. 删除该文件的旧数据（如果存在）
             normalized_path = path.as_posix()
             vector_store_manager.delete_by_source(normalized_path)
 
-            # 3. 使用新的文档分割器
-            documents = document_splitter_service.split_document(content, normalized_path)
+            # 2. 按文件类型读取并分割。DOCX 是二进制 Office 文档，不能使用 read_text()。
+            if path.suffix.lower() == ".docx":
+                documents = document_splitter_service.split_docx(normalized_path)
+            else:
+                content = path.read_text(encoding="utf-8")
+                logger.info(f"读取文件: {path}, 内容长度: {len(content)} 字符")
+                documents = document_splitter_service.split_document(content, normalized_path)
             logger.info(f"文档分割完成: {file_path} -> {len(documents)} 个分片")
 
-            # 4. 添加文档到向量存储
+            # 3. 添加文档到向量存储
             if documents:
                 vector_store_manager.add_documents(documents)
                 logger.info(f"文件索引完成: {file_path}, 共 {len(documents)} 个分片")

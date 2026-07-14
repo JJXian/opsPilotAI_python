@@ -1,7 +1,14 @@
 """文档分割服务模块 - 基于 LangChain 的智能文档分割"""
 
 from pathlib import Path
-from typing import List
+from typing import Iterator, List, Union
+
+from docx import Document as DocxDocument
+from docx.document import Document as DocxDocumentType
+from docx.oxml.table import CT_Tbl
+from docx.oxml.text.paragraph import CT_P
+from docx.table import Table
+from docx.text.paragraph import Paragraph
 
 from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
@@ -42,7 +49,9 @@ class DocumentSplitterService:
             f"overlap={self.chunk_overlap}"
         )
 
-    def split_markdown(self, content: str, file_path: str = "") -> List[Document]:
+    def split_markdown(
+        self, content: str, file_path: str = "", extension: str = ".md"
+    ) -> List[Document]:
         """
         分割 Markdown 文档 (两阶段分割 + 合并小片段)
 
@@ -70,7 +79,7 @@ class DocumentSplitterService:
             # 添加文件路径元数据
             for doc in final_docs:
                 doc.metadata["_source"] = file_path
-                doc.metadata["_extension"] = ".md"
+                doc.metadata["_extension"] = extension
                 doc.metadata["_file_name"] = Path(file_path).name
 
             logger.info(f"Markdown 分割完成: {file_path} -> {len(final_docs)} 个分片")
@@ -114,6 +123,86 @@ class DocumentSplitterService:
         except Exception as e:
             logger.error(f"文本分割失败: {file_path}, 错误: {e}")
             raise
+
+    def split_docx(self, file_path: str) -> List[Document]:
+        """提取 DOCX 的标题、正文和表格，并按标题结构切分。"""
+        try:
+            document = DocxDocument(file_path)
+            parts: list[str] = []
+
+            for block in self._iter_docx_blocks(document):
+                if isinstance(block, Paragraph):
+                    text = block.text.strip()
+                    if not text:
+                        continue
+
+                    heading_level = self._get_docx_heading_level(block)
+                    if heading_level:
+                        parts.append(f"{'#' * heading_level} {text}")
+                    else:
+                        parts.append(text)
+                else:
+                    table_text = self._format_docx_table(block)
+                    if table_text:
+                        parts.append(table_text)
+
+            content = "\n\n".join(parts)
+            if not content:
+                logger.warning(f"DOCX 文档内容为空: {file_path}")
+                return []
+
+            return self.split_markdown(content, file_path, extension=".docx")
+        except Exception as e:
+            logger.error(f"DOCX 解析失败: {file_path}, 错误: {e}")
+            raise
+
+    @staticmethod
+    def _iter_docx_blocks(document: DocxDocumentType) -> Iterator[Union[Paragraph, Table]]:
+        """按文档中的原始顺序遍历段落和表格，避免表格被统一挪到文末。"""
+        for child in document.element.body.iterchildren():
+            if isinstance(child, CT_P):
+                yield Paragraph(child, document)
+            elif isinstance(child, CT_Tbl):
+                yield Table(child, document)
+
+    @staticmethod
+    def _get_docx_heading_level(paragraph: Paragraph) -> int | None:
+        """从 Word 内置标题样式推断 Markdown 标题级别。"""
+        style_name = paragraph.style.name.lower()
+        prefixes = ("heading", "标题")
+        prefix = next((item for item in prefixes if style_name.startswith(item)), None)
+        if prefix is None:
+            return None
+
+        level = style_name.removeprefix(prefix).strip()
+        return int(level) if level.isdigit() else 1
+
+    @staticmethod
+    def _format_docx_table(table: Table) -> str:
+        """将表格转成带表头的文本记录，便于向量检索定位字段和值。"""
+        rows = [
+            [cell.text.strip().replace("\n", " ") for cell in row.cells]
+            for row in table.rows
+        ]
+        rows = [row for row in rows if any(row)]
+        if not rows:
+            return ""
+
+        headers = rows[0]
+        lines = ["表格："]
+        for row in rows[1:]:
+            cells = [
+                f"{headers[index] or f'列{index + 1}'}：{value}"
+                for index, value in enumerate(row)
+                if value
+            ]
+            if cells:
+                lines.append("；".join(cells))
+
+        # 单行表格通常没有数据行，保留该行内容以免丢失信息。
+        if len(lines) == 1:
+            lines.append("；".join(value for value in headers if value))
+        return "\n".join(lines)
 
     def split_document(self, content: str, file_path: str = "") -> List[Document]:
         """

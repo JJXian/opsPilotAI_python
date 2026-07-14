@@ -1,6 +1,6 @@
 """向量存储管理器 - 封装 Milvus VectorStore 操作"""
 
-from typing import List
+from typing import Any, List
 
 from langchain_core.documents import Document
 from langchain_milvus import Milvus
@@ -119,6 +119,34 @@ class VectorStoreManager:
         except Exception as e:
             logger.warning(f"删除旧数据失败 (可能是首次索引): {e}")
             return 0
+
+    def get_knowledge_stats(self) -> dict[str, int]:
+        """统计已成功入库的源文件数和文本分片数。"""
+        collection = milvus_manager.get_collection()
+        sources: set[str] = set()
+        chunk_count = 0
+        iterator: Any = collection.query_iterator(
+            expr='id != ""',
+            output_fields=["metadata"],
+            batch_size=1_024,
+            consistency_level="Strong",
+        )
+
+        try:
+            while batch := iterator.next():
+                chunk_count += len(batch)
+                for entity in batch:
+                    metadata = entity.get("metadata") or {}
+                    source = metadata.get("_source")
+                    if source:
+                        sources.add(str(source))
+        finally:
+            iterator.close()
+
+        logger.info(
+            f"知识库统计完成: 文档数={len(sources)}, 文本分片数={chunk_count}"
+        )
+        return {"document_count": len(sources), "chunk_count": chunk_count}
 
     def get_vector_store(self) -> Milvus:
         """

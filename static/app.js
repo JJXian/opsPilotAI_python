@@ -109,6 +109,7 @@ class SuperBizAgentApp {
         this.modeDropdown = document.getElementById('modeDropdown');
         this.currentModeText = document.getElementById('currentModeText');
         this.modeStatusText = document.getElementById('modeStatusText');
+        this.knowledgeDocumentCount = document.getElementById('knowledgeDocumentCount');
         this.fileInput = document.getElementById('fileInput');
         
         // 聊天区域元素
@@ -501,6 +502,7 @@ class SuperBizAgentApp {
         // 更新UI
         this.checkAndSetCentered();
         this.renderChatHistory();
+        this.refreshKnowledgeStats();
     }
     
     // 删除历史对话
@@ -1116,6 +1118,28 @@ class SuperBizAgentApp {
         return allowedExtensions.some(ext => fileName.endsWith(ext));
     }
 
+    async refreshKnowledgeStats() {
+        if (!this.knowledgeDocumentCount) return;
+
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/knowledge/stats`);
+            if (!response.ok) {
+                throw new Error(`HTTP错误: ${response.status}`);
+            }
+
+            const data = await response.json();
+            const documentCount = data?.data?.document_count;
+            const chunkCount = data?.data?.chunk_count;
+            if (Number.isInteger(documentCount)) {
+                this.knowledgeDocumentCount.textContent = `${documentCount} 文档`;
+                this.knowledgeDocumentCount.title = `已索引 ${chunkCount || 0} 个文本分片`;
+            }
+        } catch (error) {
+            console.warn('获取知识库统计失败:', error);
+            this.knowledgeDocumentCount.textContent = '统计不可用';
+        }
+    }
+
     // 上传文件到知识库
     async uploadFile(file) {
         // 再次验证文件类型（双重保险）
@@ -1154,6 +1178,7 @@ class SuperBizAgentApp {
             const data = await response.json();
 
             if ((data.code === 200 || data.message === 'success') && data.data) {
+                await this.refreshKnowledgeStats();
                 // 在聊天界面显示上传成功消息
                 const successMessage = `${file.name} 上传到知识库成功`;
                 this.addMessage('assistant', successMessage, false, true);

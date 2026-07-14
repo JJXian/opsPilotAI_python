@@ -6,6 +6,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.services.vector_index_service import vector_index_service
+from app.services.vector_store_manager import vector_store_manager
 from loguru import logger
 
 router = APIRouter()
@@ -129,6 +130,20 @@ async def index_directory(directory_path: str = None):
     except Exception as e:
         logger.error(f"索引目录失败: {e}")
         raise HTTPException(status_code=500, detail=f"索引目录失败: {e}")
+
+
+@router.get("/knowledge/stats")
+async def get_knowledge_stats():
+    """返回已成功建立向量索引的知识库文档统计。"""
+    try:
+        stats = vector_store_manager.get_knowledge_stats()
+        return JSONResponse(
+            status_code=200,
+            content={"code": 200, "message": "success", "data": stats},
+        )
+    except Exception as e:
+        logger.error(f"获取知识库统计失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取知识库统计失败: {e}") from e
 
 
 def _get_file_extension(filename: str) -> str:

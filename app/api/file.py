@@ -13,7 +13,7 @@ router = APIRouter()
 # 文件上传后存储的路径
 UPLOAD_DIR = Path("./uploads")
 # 支持的文件类型
-ALLOWED_EXTENSIONS = ["txt", "md", "docx"]
+ALLOWED_EXTENSIONS = ["txt", "md", "docx", "pdf"]
 # 单个文件支持最大大小
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
@@ -74,7 +74,10 @@ async def upload_file(file: UploadFile = File(...)):
             logger.info(f"向量索引创建成功: {file_path}")
         except Exception as e:
             logger.error(f"向量索引创建失败: {file_path}, 错误: {e}")
-            # 注意：即使索引失败，文件上传仍然成功，只是记录错误日志
+            raise HTTPException(
+                status_code=500,
+                detail=f"文件已保存，但知识库索引失败: {e}",
+            ) from e
 
         # 6. 返回响应
         return JSONResponse(

@@ -17,6 +17,8 @@ class DashScopeEmbeddings(Embeddings):
     - embed_query(text: str) → List[float]: 嵌入单个查询
     """
 
+    MAX_BATCH_SIZE = 10
+
     def __init__(
         self,
         api_key: str,
@@ -70,16 +72,31 @@ class DashScopeEmbeddings(Embeddings):
         
         try:
             logger.info(f"批量嵌入 {len(texts)} 个文档")
-            
-            # 批量调用 API
-            response = self.client.embeddings.create(
-                model=self.model,
-                input=texts,
-                dimensions=self.dimensions,
-                encoding_format="float"
-            )
-            
-            embeddings = [item.embedding for item in response.data]
+            embeddings: List[List[float]] = []
+
+            # DashScope text-embedding-v4 单次最多接受 10 条输入，较大文档会被切成多个分片。
+            for start in range(0, len(texts), self.MAX_BATCH_SIZE):
+                batch = texts[start : start + self.MAX_BATCH_SIZE]
+                logger.debug(
+                    f"嵌入第 {start + 1}-{start + len(batch)} 条，"
+                    f"共 {len(texts)} 条"
+                )
+                response = self.client.embeddings.create(
+                    model=self.model,
+                    input=batch,
+                    dimensions=self.dimensions,
+                    encoding_format="float",
+                )
+                batch_embeddings = [
+                    item.embedding for item in sorted(response.data, key=lambda item: item.index)
+                ]
+                if len(batch_embeddings) != len(batch):
+                    raise RuntimeError(
+                        f"嵌入接口返回数量异常：请求 {len(batch)} 条，"
+                        f"实际返回 {len(batch_embeddings)} 条"
+                    )
+                embeddings.extend(batch_embeddings)
+
             logger.debug(f"批量嵌入完成, 维度: {len(embeddings[0])}")
             
             return embeddings

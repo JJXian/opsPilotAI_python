@@ -13,12 +13,15 @@ from docx.text.paragraph import Paragraph
 from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from loguru import logger
+from pypdf import PdfReader
 
 from app.config import config
 
 
 class DocumentSplitterService:
     """文档分割服务 - 使用 LangChain 的分割器"""
+
+    MAX_PDF_PAGES = 200
 
     def __init__(self):
         """初始化文档分割服务"""
@@ -154,6 +157,54 @@ class DocumentSplitterService:
             return self.split_markdown(content, file_path, extension=".docx")
         except Exception as e:
             logger.error(f"DOCX 解析失败: {file_path}, 错误: {e}")
+            raise
+
+    def split_pdf(self, file_path: str) -> List[Document]:
+        """提取文字版 PDF 的每页文本，并保留页码元数据。"""
+        try:
+            reader = PdfReader(file_path)
+            if reader.is_encrypted:
+                raise ValueError("不支持加密 PDF，请先移除密码后再上传")
+
+            page_count = len(reader.pages)
+            if page_count > self.MAX_PDF_PAGES:
+                raise ValueError(
+                    f"PDF 页数超过限制（最多 {self.MAX_PDF_PAGES} 页），请拆分后再上传"
+                )
+
+            documents: list[Document] = []
+            for page_number, page in enumerate(reader.pages, start=1):
+                text = (page.extract_text() or "").strip()
+                if not text:
+                    logger.warning(f"PDF 第 {page_number} 页未提取到文字: {file_path}")
+                    continue
+
+                page_documents = self.text_splitter.create_documents(
+                    texts=[text],
+                    metadatas=[
+                        {
+                            "_source": file_path,
+                            "_extension": ".pdf",
+                            "_file_name": Path(file_path).name,
+                            "_page": page_number,
+                        }
+                    ],
+                )
+                documents.extend(page_documents)
+
+            if not documents:
+                raise ValueError(
+                    "未从 PDF 提取到可检索文字；该文件可能是扫描件图片 PDF，"
+                    "当前版本不支持 OCR"
+                )
+
+            logger.info(
+                f"PDF 分割完成: {file_path} -> {len(documents)} 个分片，"
+                f"共 {page_count} 页"
+            )
+            return documents
+        except Exception as e:
+            logger.error(f"PDF 解析失败: {file_path}, 错误: {e}")
             raise
 
     @staticmethod

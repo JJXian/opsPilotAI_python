@@ -1101,7 +1101,7 @@ class SuperBizAgentApp {
         if (file) {
             // 验证文件格式
             if (!this.validateFileType(file)) {
-                this.showNotification('只支持上传 TXT、Markdown (.md) 或 Word (.docx) 文件', 'error');
+                this.showNotification('只支持上传 TXT、Markdown (.md)、Word (.docx) 或文字版 PDF 文件', 'error');
                 this.fileInput.value = '';
                 return;
             }
@@ -1112,7 +1112,7 @@ class SuperBizAgentApp {
     // 验证文件类型
     validateFileType(file) {
         const fileName = file.name.toLowerCase();
-        const allowedExtensions = ['.txt', '.md', '.docx'];
+        const allowedExtensions = ['.txt', '.md', '.docx', '.pdf'];
         return allowedExtensions.some(ext => fileName.endsWith(ext));
     }
 

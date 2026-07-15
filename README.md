@@ -20,6 +20,7 @@
 - **LLM**: 阿里云 DashScope (通义千问)
 - **向量库**: Milvus
 - **工具协议**: MCP (Model Context Protocol)
+- **检索评测**: RAGAS（来源 ID 级 Context Precision / Recall）
 
 ## 🚀 快速开始
 
@@ -126,6 +127,30 @@ python -c "import requests, os, time; [requests.post('http://localhost:9900/api/
 ### 访问服务
 - **Web 界面**: http://localhost:9900
 - **API 文档**: http://localhost:9900/docs
+
+## 📈 RAG 离线评测
+
+项目内置了 5 条运维检索评测样本，用于对比纯向量检索与 Hybrid RAG（BM25 + Embedding + RRF）。评测使用来源文件名作为稳定的相关文档 ID，因此重新上传或重建索引后仍可复现。
+
+```bash
+# 首次安装 RAGAS 评测依赖
+uv sync --extra eval
+
+# 运行评测（需要 Milvus 已启动，且 aiops-docs 文档已经入库）
+make eval-rag
+
+# 使用其他 TopK
+.venv/bin/python -m app.evaluation --top-k 5
+```
+
+报告会写入 `evaluation/reports/`，同时生成 JSON（便于后续画图）与 Markdown（便于复盘或放入项目文档）。核心指标：
+
+- `Context Precision`：召回来源中有多少是人工标注的相关文档。
+- `Context Recall`：人工标注的相关来源是否被成功召回。
+- `Hit Rate`：TopK 中是否至少命中一条相关来源。
+- `MRR`：第一条相关来源的排名质量，越靠前越高。
+
+默认评测只比较检索，不会调用裁判大模型，也不会向额外服务发送内部文档内容。
 
 ## 📡 API 接口
 

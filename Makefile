@@ -21,7 +21,7 @@ NC = \033[0m
         install install-dev dev run test test-quick format lint fix type-check \
         security pre-commit-install pre-commit check-all coverage docs shell \
         ipython watch add add-dev remove list-docs test-upload sync logs \
-        start-cls stop-cls start-monitor stop-monitor start-api stop-api status-mcp
+        start-cls stop-cls start-monitor stop-monitor start-api stop-api status-mcp eval-rag
 
 # ============================================================
 # 默认目标：显示帮助信息
@@ -80,6 +80,7 @@ help:
 	@echo "  $(YELLOW)make clean$(NC)        - 🧹 清理临时文件"
 	@echo "  $(YELLOW)make shell$(NC)        - 🐍 启动 Python Shell"
 	@echo "  $(YELLOW)make coverage$(NC)     - 📊 查看测试覆盖率"
+	@echo "  $(YELLOW)make eval-rag$(NC)     - 📈 对比纯向量与混合检索效果"
 	@echo "  $(YELLOW)make logs$(NC)         - 📜 查看服务日志"
 	@echo ""
 	@echo "$(GREEN)═══════════════════════════════════════════════════════$(NC)"
@@ -89,6 +90,12 @@ help:
 	@echo "  3. 检查状态:   $(YELLOW)make status-mcp$(NC)"
 	@echo "  4. 停止服务:   $(YELLOW)make stop$(NC)"
 	@echo "$(GREEN)═══════════════════════════════════════════════════════$(NC)"
+
+# ============================================================
+# RAG 离线评测
+# ============================================================
+eval-rag:
+	@.venv/bin/python -m app.evaluation
 
 # ============================================================
 # 一键初始化

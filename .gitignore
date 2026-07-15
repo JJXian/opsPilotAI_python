@@ -78,3 +78,8 @@ dmypy.json
 
 # Ruff
 .ruff_cache/
+
+# Generated RAG evaluation reports
+evaluation/reports/*.json
+evaluation/reports/*.md
+!evaluation/reports/.gitkeep

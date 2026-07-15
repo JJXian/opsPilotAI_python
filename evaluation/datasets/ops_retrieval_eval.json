@@ -1,0 +1,32 @@
+[
+  {
+    "id": "cpu-high-usage",
+    "question": "HighCPUUsage 告警持续 5 分钟超过 80% 时，应该怎样排查和处理？",
+    "reference_answer": "先查询系统与应用日志确认高 CPU 进程和错误，再根据死循环、流量突增、定时任务重叠或慢 SQL 处理，并验证 CPU 降至 60% 以下。",
+    "expected_sources": ["cpu_high_usage.md"]
+  },
+  {
+    "id": "memory-oom",
+    "question": "应用出现 OutOfMemoryError，内存使用率超过 85%，应先做哪些操作？",
+    "reference_answer": "查询内存和应用日志，必要时重启高内存实例并在重启前获取堆转储，排查内存泄漏、缓存配置和 JVM 参数。",
+    "expected_sources": ["memory_high_usage.md"]
+  },
+  {
+    "id": "slow-p99",
+    "question": "P99 响应时间连续 5 分钟超过 3 秒，应该优先查看哪些日志？",
+    "reference_answer": "查询应用性能日志、数据库慢查询日志和系统资源指标，排查慢 SQL、外部 API 超时、缓存失效和资源不足。",
+    "expected_sources": ["slow_response.md"]
+  },
+  {
+    "id": "service-500",
+    "question": "服务健康检查失败且 500 错误率超过 50%，如何快速恢复服务？",
+    "reference_answer": "查询应用和系统事件日志，检查应用崩溃、数据库连接、下游依赖、配置及资源耗尽；发布后故障先回滚并实施降级。",
+    "expected_sources": ["service_unavailable.md"]
+  },
+  {
+    "id": "disk-no-space",
+    "question": "机器报 No space left on device，磁盘使用率超过 90%，如何处理？",
+    "reference_answer": "查询磁盘和应用日志定位占用，优先处理过大日志、临时文件、数据增长或备份文件，并配置日志轮转和定期清理。",
+    "expected_sources": ["disk_high_usage.md"]
+  }
+]

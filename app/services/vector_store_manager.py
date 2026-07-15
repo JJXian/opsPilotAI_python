@@ -142,6 +142,30 @@ class VectorStoreManager:
         finally:
             iterator.close()
 
+    def list_indexed_chunks(self) -> list[tuple[str, str, dict[str, Any]]]:
+        """返回所有已入库分片，供 BM25 索引从 Milvus 重建。"""
+        collection = milvus_manager.get_collection()
+        iterator: Any = collection.query_iterator(
+            expr='id != ""',
+            output_fields=["id", "content", "metadata"],
+            batch_size=1_024,
+            consistency_level="Strong",
+        )
+        chunks: list[tuple[str, str, dict[str, Any]]] = []
+
+        try:
+            while batch := iterator.next():
+                for entity in batch:
+                    chunk_id = entity.get("id")
+                    content = entity.get("content")
+                    metadata = entity.get("metadata") or {}
+                    if chunk_id and content and isinstance(metadata, dict):
+                        chunks.append((str(chunk_id), str(content), metadata))
+        finally:
+            iterator.close()
+
+        return chunks
+
     def list_indexed_documents(self) -> list[dict[str, Any]]:
         """按源文件聚合已入库分片，返回知识库管理页需要的索引信息。"""
         documents: dict[str, dict[str, Any]] = {}

@@ -7,6 +7,7 @@ from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.services.vector_index_service import vector_index_service
+from app.services.bm25_retrieval_service import bm25_retrieval_service
 from app.services.vector_store_manager import vector_store_manager
 from loguru import logger
 
@@ -240,6 +241,8 @@ async def delete_knowledge_document(filename: str):
             file_path.unlink()
         elif deleted_chunks == 0:
             raise HTTPException(status_code=404, detail="文档不存在或已删除")
+
+        bm25_retrieval_service.refresh_from_milvus()
 
         logger.info(f"知识库文档已删除: {file_path}, 分片数={deleted_chunks}")
         return {"code": 200, "message": "success", "data": {"deleted_chunks": deleted_chunks}}

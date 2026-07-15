@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 from loguru import logger
 
 from app.services.document_splitter_service import document_splitter_service
+from app.services.bm25_retrieval_service import bm25_retrieval_service
 from app.services.vector_store_manager import vector_store_manager
 
 SUPPORTED_FILE_SUFFIXES = {".txt", ".md", ".docx", ".pdf", ".xlsx"}
@@ -171,6 +172,7 @@ class VectorIndexService:
             if documents:
                 vector_store_manager.delete_by_source(normalized_path)
                 vector_store_manager.add_documents(documents)
+                bm25_retrieval_service.refresh_from_milvus()
                 logger.info(f"文件索引完成: {file_path}, 共 {len(documents)} 个分片")
             else:
                 logger.warning(f"文件内容为空或无法分割: {file_path}")

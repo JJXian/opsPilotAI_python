@@ -35,8 +35,16 @@ class Settings(BaseSettings):
     milvus_timeout: int = 10000  # 毫秒
 
     # RAG 配置
-    rag_top_k: int = 3
+    rag_top_k: int = 3  # 兼容旧配置，新的混合检索使用下列分阶段参数
     rag_model: str = "qwen-max"  # 使用快速响应模型，不带扩展思考
+    rag_dense_top_k: int = 10
+    rag_bm25_top_k: int = 10
+    rag_fusion_top_k: int = 15
+    rag_final_top_k: int = 3
+    rag_rrf_k: int = 60
+    # Reranker 会将候选文本发送给 DashScope；默认关闭，由部署方显式确认后开启。
+    rag_rerank_enabled: bool = False
+    rag_rerank_model: str = "gte-rerank-v2"
 
     # 文档分块配置
     chunk_max_size: int = 800

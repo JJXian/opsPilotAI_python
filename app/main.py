@@ -14,6 +14,7 @@ from app.config import config
 from loguru import logger
 from app.api import chat, health, file, aiops
 from app.core.milvus_client import milvus_manager
+from app.services.bm25_retrieval_service import bm25_retrieval_service
 
 
 @asynccontextmanager
@@ -30,6 +31,13 @@ async def lifespan(app: FastAPI):
     logger.info("🔌 正在连接 Milvus...")
     milvus_manager.connect()
     logger.info("✅ Milvus 连接成功")
+
+    try:
+        bm25_retrieval_service.refresh_from_milvus()
+        logger.info("✅ BM25 索引已从 Milvus 重建")
+    except Exception as error:
+        # BM25 可在首个检索请求时再次懒加载，不能因它阻塞 API 的整体启动。
+        logger.warning(f"BM25 启动重建失败，将在首次检索时重试: {error}")
     
     logger.info("=" * 60)
     

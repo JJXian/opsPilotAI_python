@@ -52,5 +52,42 @@
   {"id":"disk-07","question":"HighDiskUsage 告警触发时，要查询什么系统指标条件？","reference_answer":"查询 disk_usage 大于 80 或 filesystem full 的记录。","expected_sources":["disk_high_usage.md"]},
   {"id":"disk-08","question":"日志不能写入且应用开始崩溃，优先怀疑哪个系统资源？","reference_answer":"优先检查磁盘使用率和 No space left on device 错误。","expected_sources":["disk_high_usage.md"]},
   {"id":"disk-09","question":"如果磁盘空间满是正常业务增长导致的，应该怎么解决？","reference_answer":"扩容云盘或使用分布式存储，并规划数据归档。","expected_sources":["disk_high_usage.md"]},
-  {"id":"disk-10","question":"排查磁盘满时，需要从日志中分析哪些目录和文件特征？","reference_answer":"分析最大目录、日志大小、临时文件数量和数据增长趋势。","expected_sources":["disk_high_usage.md"]}
+  {"id":"disk-10","question":"排查磁盘满时，需要从日志中分析哪些目录和文件特征？","reference_answer":"分析最大目录、日志大小、临时文件数量和数据增长趋势。","expected_sources":["disk_high_usage.md"]},
+
+  {"id":"exact-ora-01","question":"ORA-12514 报错表示什么，应该先检查什么？","reference_answer":"检查 Oracle Listener 状态、服务名注册和应用连接串。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-ora-02","question":"Oracle 监听器不知道请求的 SERVICE_NAME，如何排查？","reference_answer":"使用 lsnrctl status 核对服务注册和连接串 SERVICE_NAME。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-ora-03","question":"支付服务连 Oracle 出现 TNS listener does not currently know of service requested，怎么处理？","reference_answer":"核对监听器服务注册、LOCAL_LISTENER 和应用连接配置。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-ora-04","question":"lsnrctl status 中没有目标服务时，ORA-12514 的修复方向是什么？","reference_answer":"检查动态服务注册，必要时执行 ALTER SYSTEM REGISTER。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-ora-05","question":"修改 Oracle SERVICE_NAME 后，payment-service 还需要做什么？","reference_answer":"重启连接池并验证数据库连接成功率。","expected_sources":["precision_retrieval_runbook.md"]},
+
+  {"id":"exact-oom-01","question":"Kubernetes Pod 显示 OOMKilled，第一步用什么命令查原因？","reference_answer":"使用 kubectl describe pod 查看 Last State 和内存限制。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-oom-02","question":"容器因 OOMKilled 被杀，应该检查 request 还是 limit？","reference_answer":"两者都应检查，重点确认 memory limit 与实际用量是否匹配。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-oom-03","question":"如何查看 Pod 的实时内存使用，判断 OOMKilled 是否由峰值造成？","reference_answer":"使用 kubectl top pod 查看内存使用率。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-oom-04","question":"发生 OOMKilled 后只增加 Deployment memory limit 可以吗？","reference_answer":"不够，还需排查 Java 堆、缓存、大对象和批处理根因。","expected_sources":["precision_retrieval_runbook.md"]},
+
+  {"id":"exact-alert-01","question":"ALERT-OPS-7788 是什么告警？","reference_answer":"payment-service 调支付网关超时比例过高的告警。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-alert-02","question":"payment-service 出现 ALERT-OPS-7788 时应该查哪些日志字段？","reference_answer":"按 trace_id、gateway_timeout 和告警编号查询失败请求。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-alert-03","question":"支付网关连续超时触发 ALERT-OPS-7788，应如何临时降级？","reference_answer":"启用支付查询降级和重试限流，避免堆积。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-alert-04","question":"告警编号 ALERT-OPS-7788 的触发阈值是多少？","reference_answer":"连续 3 分钟支付网关超时比例超过 20%。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-alert-05","question":"处理 payment-service 支付网关超时后如何确认恢复？","reference_answer":"确认告警自动恢复并复盘失败订单。","expected_sources":["precision_retrieval_runbook.md"]},
+
+  {"id":"exact-service-01","question":"payment-service 调用支付网关超时，要优先检查什么？","reference_answer":"检查网络延迟、DNS 解析和 HTTP 连接超时配置。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-service-02","question":"payment-service 连接池修改后如何验证数据库连接稳定？","reference_answer":"观察连接池指标和错误率。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-service-03","question":"payment-service 的数据库连接失败可能有哪些典型错误？","reference_answer":"Connection refused、Communications link failure、Too many connections。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-service-04","question":"支付服务请求堆积时为什么需要限制重试？","reference_answer":"避免下游超时导致重试放大和请求进一步堆积。","expected_sources":["precision_retrieval_runbook.md"]},
+
+  {"id":"exact-path-01","question":"/var/log/app/error.log 快速增长会造成什么风险？","reference_answer":"可能耗尽磁盘空间并影响应用写日志或运行。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-path-02","question":"如何确认 /var/log/app/error.log 的文件大小？","reference_answer":"使用 du -h /var/log/app/error.log。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-path-03","question":"正在写入的 /var/log/app/error.log 能直接 rm 吗？","reference_answer":"不能直接删除，应通过日志轮转或确认后安全截断。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-path-04","question":"error.log 重复写相同异常堆栈，除了轮转还要做什么？","reference_answer":"修复持续报错的根因，防止日志再次增长。","expected_sources":["precision_retrieval_runbook.md"]},
+
+  {"id":"exact-jvm-01","question":"-Xmx4096m 具体表示什么？","reference_answer":"JVM 最大堆内存为 4096 MB。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-jvm-02","question":"容器内存有限时配置 -Xmx4096m 有什么风险？","reference_answer":"没有为 Metaspace、线程栈和系统预留内存时可能 OOMKilled。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-jvm-03","question":"如何判断 Java 服务是否真的需要把堆调到 Xmx4096m？","reference_answer":"结合 GC 日志、jmap -heap 和监控数据判断。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-jvm-04","question":"调大 -Xmx4096m 后，压测阶段还应该验证什么？","reference_answer":"验证 Full GC、暂停时间和峰值内存。","expected_sources":["precision_retrieval_runbook.md"]},
+
+  {"id":"exact-mysql-01","question":"连接 10.23.4.15:3306 被拒绝，应用节点如何先验证端口？","reference_answer":"执行 nc -vz 10.23.4.15 3306。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-mysql-02","question":"payment-service 无法访问 10.23.4.15:3306，应检查哪些网络项？","reference_answer":"检查 MySQL 监听地址、防火墙、安全组和网络连通。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-mysql-03","question":"10.23.4.15:3306 报 Too many connections，数据库侧如何排查？","reference_answer":"查看 max_connections、活跃连接数、慢查询和连接池泄漏。","expected_sources":["precision_retrieval_runbook.md"]},
+  {"id":"exact-mysql-04","question":"MySQL 连接恢复后，payment-service 还需要观察哪些指标？","reference_answer":"观察连接池指标和错误率，确认连接稳定。","expected_sources":["precision_retrieval_runbook.md"]}
 ]

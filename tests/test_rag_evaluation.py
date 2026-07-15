@@ -26,13 +26,13 @@ def test_average_metrics_returns_zero_for_empty_evaluation():
     }
 
 
-def test_default_ops_evaluation_dataset_has_balanced_fifty_samples():
+def test_default_ops_evaluation_dataset_has_balanced_eighty_samples():
     project_root = Path(__file__).resolve().parents[1]
     samples = load_evaluation_dataset(
         project_root / "evaluation" / "datasets" / "ops_retrieval_eval.json"
     )
 
-    assert len(samples) == 50
+    assert len(samples) == 80
     source_counts = {}
     for sample in samples:
         for source in sample.expected_sources:
@@ -44,4 +44,5 @@ def test_default_ops_evaluation_dataset_has_balanced_fifty_samples():
         "slow_response.md": 10,
         "service_unavailable.md": 10,
         "disk_high_usage.md": 10,
+        "precision_retrieval_runbook.md": 30,
     }

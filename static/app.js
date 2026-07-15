@@ -1151,7 +1151,7 @@ class SuperBizAgentApp {
         if (file) {
             // 验证文件格式
             if (!this.validateFileType(file)) {
-                this.showNotification('只支持上传 TXT、Markdown、Word、文字版 PDF 或 Excel (.xlsx) 文件', 'error');
+                this.showNotification('只支持上传 TXT、Markdown、Word、PDF 或 Excel (.xlsx) 文件', 'error');
                 this.fileInput.value = '';
                 return;
             }

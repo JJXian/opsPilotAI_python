@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     # 文档分块配置
     chunk_max_size: int = 800
     chunk_overlap: int = 100
+    pdf_ocr_enabled: bool = True
+    pdf_ocr_min_text_length: int = 20
+    pdf_ocr_render_scale: float = 2.0
 
     # MCP 服务配置（transport: stdio | sse | streamable-http）
     # 腾讯云托管 MCP 的 URL 通常含 /sse/，需使用 sse；本地 FastMCP 使用 streamable-http

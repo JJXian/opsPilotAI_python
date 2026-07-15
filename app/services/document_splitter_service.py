@@ -1,8 +1,9 @@
 """文档分割服务模块 - 基于 LangChain 的智能文档分割"""
 
 from pathlib import Path
-from typing import Iterator, List, Union
+from typing import Any, Iterator, List, Union
 
+import fitz
 from docx import Document as DocxDocument
 from docx.document import Document as DocxDocumentType
 from docx.oxml.table import CT_Tbl
@@ -15,6 +16,7 @@ from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharac
 from loguru import logger
 from pypdf import PdfReader
 from python_calamine import CalamineWorkbook
+from rapidocr_onnxruntime import RapidOCR
 
 from app.config import config
 
@@ -47,6 +49,7 @@ class DocumentSplitterService:
             length_function=len,
             is_separator_regex=False,
         )
+        self._ocr_engine: RapidOCR | None = None
 
         logger.info(
             f"文档分割服务初始化完成, chunk_size={self.chunk_size}, "
@@ -162,7 +165,7 @@ class DocumentSplitterService:
             raise
 
     def split_pdf(self, file_path: str) -> List[Document]:
-        """提取文字版 PDF 的每页文本，并保留页码元数据。"""
+        """提取 PDF 文字；扫描页或低文字页自动使用本地 OCR 兜底。"""
         try:
             reader = PdfReader(file_path)
             if reader.is_encrypted:
@@ -177,8 +180,17 @@ class DocumentSplitterService:
             documents: list[Document] = []
             for page_number, page in enumerate(reader.pages, start=1):
                 text = (page.extract_text() or "").strip()
+                extraction_method = "text"
+                if len(text) < config.pdf_ocr_min_text_length and config.pdf_ocr_enabled:
+                    ocr_text = self._ocr_pdf_page(file_path, page_number - 1)
+                    if ocr_text:
+                        text = ocr_text
+                        extraction_method = "ocr"
+                    elif not text:
+                        logger.warning(f"PDF 第 {page_number} 页未提取到文字或 OCR 内容: {file_path}")
+                        continue
+
                 if not text:
-                    logger.warning(f"PDF 第 {page_number} 页未提取到文字: {file_path}")
                     continue
 
                 page_documents = self.text_splitter.create_documents(
@@ -189,6 +201,7 @@ class DocumentSplitterService:
                             "_extension": ".pdf",
                             "_file_name": Path(file_path).name,
                             "_page": page_number,
+                            "_extraction_method": extraction_method,
                         }
                     ],
                 )
@@ -196,8 +209,7 @@ class DocumentSplitterService:
 
             if not documents:
                 raise ValueError(
-                    "未从 PDF 提取到可检索文字；该文件可能是扫描件图片 PDF，"
-                    "当前版本不支持 OCR"
+                    "未从 PDF 提取到可检索文字；请确认扫描件清晰且 OCR 功能已启用"
                 )
 
             logger.info(
@@ -208,6 +220,40 @@ class DocumentSplitterService:
         except Exception as e:
             logger.error(f"PDF 解析失败: {file_path}, 错误: {e}")
             raise
+
+    def _get_ocr_engine(self) -> RapidOCR:
+        """按需初始化 OCR，避免普通文字 PDF 在启动时加载 OCR 模型。"""
+        if self._ocr_engine is None:
+            self._ocr_engine = RapidOCR()
+            logger.info("RapidOCR 初始化完成")
+        return self._ocr_engine
+
+    def _ocr_pdf_page(self, file_path: str, page_index: int) -> str:
+        """将单个 PDF 页面渲染为图片后执行本地 OCR。"""
+        try:
+            pdf = fitz.open(file_path)
+            try:
+                page = pdf.load_page(page_index)
+                matrix = fitz.Matrix(config.pdf_ocr_render_scale, config.pdf_ocr_render_scale)
+                image = page.get_pixmap(matrix=matrix, alpha=False).tobytes("png")
+            finally:
+                pdf.close()
+
+            result, _elapsed = self._get_ocr_engine()(image)
+            if not result:
+                return ""
+
+            lines: list[str] = []
+            for item in result:
+                if not isinstance(item, (list, tuple)) or len(item) < 2:
+                    continue
+                recognized_text = str(item[1]).strip()
+                if recognized_text:
+                    lines.append(recognized_text)
+            return "\n".join(lines)
+        except Exception as e:
+            logger.warning(f"PDF 第 {page_index + 1} 页 OCR 失败: {file_path}, 错误: {e}")
+            return ""
 
     def split_xlsx(self, file_path: str) -> List[Document]:
         """将 XLSX 的每个工作表数据行转为可检索的字段和值记录。"""

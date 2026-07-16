@@ -61,6 +61,7 @@ volumes/
 # Uploads
 uploads/
 *.tmp
+tmp/
 
 # OS
 .DS_Store

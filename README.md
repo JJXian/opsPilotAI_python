@@ -13,12 +13,14 @@
 - 🔧 **AIOps 诊断** - Plan-Execute-Replan 自动故障诊断和根因分析
 - 🌐 **Web 界面** - 现代化 UI，支持多种对话模式：快速问答/流式对话
 - 🔌 **MCP 集成** - 日志查询和监控数据工具接入
+- 🧠 **持久化记忆** - PostgreSQL 保存会话、消息和摘要记忆，LangGraph Checkpointer 保存 Agent 执行状态
 
 ## 🛠️ 技术栈
 
 - **框架**: FastAPI + LangChain + LangGraph
 - **LLM**: 阿里云 DashScope (通义千问)
 - **向量库**: Milvus
+- **关系数据库**: PostgreSQL（会话记忆、消息历史、LangGraph Checkpoint）
 - **工具协议**: MCP (Model Context Protocol)
 - **检索评测**: RAGAS（来源 ID 级 Context Precision / Recall）
 
@@ -57,6 +59,18 @@ make init
 # 5. 一键启动
 make start
 ```
+
+### 会话记忆持久化
+
+`make up` 会同时启动 Milvus 和 PostgreSQL。默认数据库连接为：
+
+```env
+DATABASE_URL=postgresql://opspilot:opspilot@localhost:5432/opspilot
+```
+
+首次启动时应用会自动创建会话与消息表，以及 LangGraph Checkpointer 所需表。普通对话按“会话摘要 + 最近 16 条消息 + 当前问题”组装上下文；消息数量达到 20 条后，会将较早记录压缩为摘要，以控制上下文长度和模型调用成本。
+
+会话历史保存在 PostgreSQL，而非浏览器 `localStorage`；因此刷新页面或重启 FastAPI 后仍可继续对话。Milvus 中的知识库文档与聊天记忆相互独立。
 
 #### Windows 环境（PowerShell/CMD）
 
@@ -160,6 +174,9 @@ make eval-rag
 |------|------|------|------|
 | 普通对话 | POST | `/api/chat` | 一次性返回 |
 | 流式对话 | POST | `/api/chat_stream` | SSE 流式输出 |
+| 会话列表 | GET | `/api/chat/sessions` | 分页获取持久化会话 |
+| 会话消息 | GET | `/api/chat/session/{session_id}` | 获取会话历史 |
+| 删除会话 | DELETE | `/api/chat/session/{session_id}` | 删除消息、摘要和 Agent Checkpoint |
 | AIOps 诊断 | POST | `/api/aiops` | 自动故障诊断（流式） |
 | 文件上传 | POST | `/api/upload` | 上传并索引文档 |
 | 健康检查 | GET | `/api/health` | 服务状态检查 |

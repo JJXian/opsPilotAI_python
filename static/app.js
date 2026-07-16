@@ -2,11 +2,11 @@
 class SuperBizAgentApp {
     constructor() {
         this.apiBaseUrl = 'http://localhost:9900/api';
-        this.currentMode = 'quick'; // 'quick' 或 'stream'
+        this.currentMode = 'stream'; // 'quick' 或 'stream'
         this.sessionId = this.generateSessionId();
         this.isStreaming = false;
         this.currentChatHistory = []; // 当前对话的消息历史
-        this.chatHistories = this.loadChatHistories(); // 所有历史对话
+        this.chatHistories = []; // 后端 PostgreSQL 中的持久化会话
         this.isCurrentChatFromHistory = false; // 标记当前对话是否是从历史记录加载的
         this.forceRag = false;
         this.pendingReplaceDocument = null;
@@ -19,6 +19,7 @@ class SuperBizAgentApp {
         this.initMarkdown();
         this.checkAndSetCentered();
         this.renderChatHistory();
+        this.loadPersistentSessions();
         this.refreshKnowledgeStats();
     }
 
@@ -147,6 +148,34 @@ class SuperBizAgentApp {
         // 新建对话
         if (this.newChatBtn) {
             this.newChatBtn.addEventListener('click', () => this.newChat());
+        }
+
+        // 历史会话列表会在刷新后重绘，使用事件委托保证新节点也能响应点击。
+        if (this.chatHistoryList) {
+            this.chatHistoryList.addEventListener('click', (event) => {
+                const target = event.target;
+                if (!(target instanceof Element)) {
+                    return;
+                }
+
+                const deleteButton = target.closest('.history-item-delete');
+                const historyItem = target.closest('.history-item');
+                if (!historyItem) {
+                    return;
+                }
+
+                const historyId = historyItem.dataset.historyId;
+                if (!historyId) {
+                    return;
+                }
+
+                if (deleteButton) {
+                    this.deleteChatHistory(historyId);
+                    return;
+                }
+
+                this.loadChatHistory(historyId);
+            });
         }
         
         // AI Ops按钮
@@ -314,8 +343,8 @@ class SuperBizAgentApp {
         // 生成新的会话ID
         this.sessionId = this.generateSessionId();
         
-        // 重置模式为快速
-        this.currentMode = 'quick';
+        // 新会话默认使用流式模式，缩短用户首次看到回复的等待时间。
+        this.currentMode = 'stream';
         this.updateUI();
         
         // 重新设置居中样式（确保对话框居中显示）
@@ -411,6 +440,30 @@ class SuperBizAgentApp {
             return [];
         }
     }
+
+    // 从后端加载持久化会话；localStorage 只保留旧版本离线回退能力。
+    async loadPersistentSessions() {
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/chat/sessions?page=1&page_size=50`);
+            if (!response.ok) {
+                throw new Error(`HTTP错误: ${response.status}`);
+            }
+            const data = await response.json();
+            this.chatHistories = (data.items || []).map(item => ({
+                id: item.id,
+                title: item.title || '新对话',
+                messages: [],
+                createdAt: item.created_at,
+                updatedAt: item.updated_at,
+                agentType: item.agent_type,
+            }));
+            this.renderChatHistory();
+        } catch (error) {
+            console.warn('加载持久化会话失败，暂时使用本地缓存:', error);
+            this.chatHistories = this.loadChatHistories();
+            this.renderChatHistory();
+        }
+    }
     
     // 保存历史对话列表到localStorage
     saveChatHistories() {
@@ -448,20 +501,6 @@ class SuperBizAgentApp {
                     </svg>
                 </button>
             `;
-            
-            // 点击历史项加载对话
-            historyItem.addEventListener('click', (e) => {
-                if (!e.target.closest('.history-item-delete')) {
-                    this.loadChatHistory(history.id);
-                }
-            });
-            
-            // 删除历史对话
-            const deleteBtn = historyItem.querySelector('.history-item-delete');
-            deleteBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.deleteChatHistory(history.id);
-            });
             
             this.chatHistoryList.appendChild(historyItem);
         });
@@ -505,7 +544,7 @@ class SuperBizAgentApp {
                         this.currentChatHistory = [];
                         backendHistory.forEach(msg => {
                             // 后端返回格式: {role: "user|assistant", content: "...", timestamp: "..."}
-                            const messageType = msg.role === 'user' ? 'user' : 'bot';
+                            const messageType = msg.role === 'user' ? 'user' : 'assistant';
                             this.addMessage(messageType, msg.content, false, false);
                         });
                     } else {
@@ -555,14 +594,8 @@ class SuperBizAgentApp {
     async deleteChatHistory(historyId) {
         try {
             // 调用后端API清空会话
-            const response = await fetch('/api/chat/clear', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    session_id: historyId
-                })
+            const response = await fetch(`/api/chat/session/${historyId}`, {
+                method: 'DELETE',
             });
 
             if (!response.ok) {
@@ -574,7 +607,6 @@ class SuperBizAgentApp {
             if (result.status === 'success') {
                 // 从本地存储中删除
                 this.chatHistories = this.chatHistories.filter(h => h.id !== historyId);
-                this.saveChatHistories();
                 this.renderChatHistory();
                 
                 // 如果删除的是当前对话，清空当前对话
@@ -729,6 +761,7 @@ class SuperBizAgentApp {
                 this.updateCurrentChatHistory();
                 this.renderChatHistory(); // 更新历史对话列表显示
             }
+            await this.loadPersistentSessions();
         }
     }
 

@@ -3,12 +3,14 @@ AIOps 智能运维接口
 """
 
 import json
+
 from fastapi import APIRouter
-from sse_starlette.sse import EventSourceResponse
 from loguru import logger
+from sse_starlette.sse import EventSourceResponse
 
 from app.models.aiops import AIOpsRequest
 from app.services.aiops_service import aiops_service
+from app.services.conversation_service import conversation_service
 
 router = APIRouter()
 
@@ -125,16 +127,32 @@ async def diagnose_stream(request: AIOpsRequest):
     logger.info(f"[会话 {session_id}] 收到 AIOps 诊断请求（流式）")
 
     async def event_generator():
+        final_report = ""
         try:
+            await conversation_service.add_message(
+                session_id,
+                "user",
+                "执行 AIOps 智能诊断",
+                agent_type="aiops",
+            )
             async for event in aiops_service.diagnose(session_id=session_id):
+                if event.get("type") == "report":
+                    final_report = str(event.get("report", ""))
+                elif event.get("type") == "complete" and not final_report:
+                    final_report = str(event.get("response", ""))
+
                 # 发送事件
-                yield {
-                    "event": "message",
-                    "data": json.dumps(event, ensure_ascii=False)
-                }
+                yield {"event": "message", "data": json.dumps(event, ensure_ascii=False)}
 
                 # 如果是完成或错误事件，结束流
                 if event.get("type") in ["complete", "error"]:
+                    await conversation_service.add_message(
+                        session_id,
+                        "assistant",
+                        final_report or str(event.get("message", "")),
+                        status="completed" if event.get("type") == "complete" else "failed",
+                        agent_type="aiops",
+                    )
                     break
 
             logger.info(f"[会话 {session_id}] AIOps 诊断流式响应完成")
@@ -143,11 +161,10 @@ async def diagnose_stream(request: AIOpsRequest):
             logger.error(f"[会话 {session_id}] AIOps 诊断流式响应异常: {e}", exc_info=True)
             yield {
                 "event": "message",
-                "data": json.dumps({
-                    "type": "error",
-                    "stage": "exception",
-                    "message": f"诊断异常: {str(e)}"
-                }, ensure_ascii=False)
+                "data": json.dumps(
+                    {"type": "error", "stage": "exception", "message": f"诊断异常: {str(e)}"},
+                    ensure_ascii=False,
+                ),
             }
 
     return EventSourceResponse(event_generator())

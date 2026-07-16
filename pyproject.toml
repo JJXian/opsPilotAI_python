@@ -38,6 +38,8 @@ dependencies = [
     "rapidocr-onnxruntime>=1.4.4",
     "rank-bm25>=0.2.2",
     "jieba>=0.42.1",
+    "psycopg[binary,pool]>=3.2,<4.0",
+    "langgraph-checkpoint-postgres>=3.0.0,<4.0",
 ]
 
 [project.optional-dependencies]

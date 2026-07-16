@@ -34,6 +34,17 @@ class Settings(BaseSettings):
     milvus_port: int = 19530
     milvus_timeout: int = 10000  # 毫秒
 
+    # 会话记忆与 LangGraph 状态持久化
+    database_url: str = "postgresql://opspilot:opspilot@localhost:5432/opspilot"
+    # 同时限制消息数量与字符量，避免单条诊断结果撑爆模型上下文。
+    memory_window_messages: int = 10
+    memory_summary_trigger_messages: int = 12
+    memory_summary_max_chars: int = 2500
+    memory_context_max_chars: int = 12000
+    memory_message_max_chars: int = 2400
+    memory_summary_input_max_chars: int = 12000
+    agent_request_timeout_seconds: float = 40.0
+
     # RAG 配置
     rag_top_k: int = 3  # 兼容旧配置，新的混合检索使用下列分阶段参数
     rag_model: str = "qwen-max"  # 使用快速响应模型，不带扩展思考

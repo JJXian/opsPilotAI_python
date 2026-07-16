@@ -9,6 +9,7 @@ UPLOAD_API = $(SERVER_URL)/api/upload
 HEALTH_CHECK_API = $(SERVER_URL)/health
 DOCS_DIR = aiops-docs
 MILVUS_CONTAINER = milvus-standalone
+POSTGRES_CONTAINER = opspilot-postgres
 
 # 颜色输出
 GREEN = \033[0;32m
@@ -35,8 +36,8 @@ help:
 	@echo "  $(YELLOW)make init$(NC)         - 🚀 一键初始化（Docker → 服务 → 上传文档）"
 	@echo ""
 	@echo "$(CYAN)【Docker 管理】$(NC)"
-	@echo "  $(YELLOW)make up$(NC)           - 🐳 启动 Milvus 容器"
-	@echo "  $(YELLOW)make down$(NC)         - 🛑 停止 Milvus 容器"
+	@echo "  $(YELLOW)make up$(NC)           - 🐳 启动 Milvus 与 PostgreSQL 容器"
+	@echo "  $(YELLOW)make down$(NC)         - 🛑 停止数据库容器"
 	@echo "  $(YELLOW)make status$(NC)       - 📊 查看容器状态"
 	@echo ""
 	@echo "$(CYAN)【服务管理】$(NC)"
@@ -105,7 +106,7 @@ init:
 	@echo "$(GREEN)🚀 开始一键初始化 SuperBizAgent...$(NC)"
 	@echo "$(GREEN)═══════════════════════════════════════════════════════$(NC)"
 	@echo ""
-	@echo "$(YELLOW)步骤 1/4: 启动 Docker 容器（Milvus 向量数据库）$(NC)"
+	@echo "$(YELLOW)步骤 1/4: 启动 Docker 容器（Milvus + PostgreSQL）$(NC)"
 	@$(MAKE) up
 	@echo ""
 	@echo "$(YELLOW)步骤 2/4: 启动 FastAPI 服务$(NC)"
@@ -143,34 +144,23 @@ up:
 		colima start 2>/dev/null || (echo "$(RED)❌ 无法启动 Docker，请手动启动$(NC)" && exit 1); \
 		sleep 3; \
 	fi
-	@if docker ps --format '{{.Names}}' | grep -q "^$(MILVUS_CONTAINER)$$"; then \
-		echo "$(GREEN)✅ Milvus 容器已经在运行中$(NC)"; \
-		docker ps --filter "name=milvus" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -10; \
+	@echo "$(YELLOW)🚀 启动 Milvus 与 PostgreSQL 容器...$(NC)"
+	@docker compose -f vector-database.yml up -d
+	@echo "$(YELLOW)⏳ 等待容器启动...$(NC)"
+	@sleep 5
+	@if docker ps --format '{{.Names}}' | grep -q "^$(MILVUS_CONTAINER)$$" && docker ps --format '{{.Names}}' | grep -q "^$(POSTGRES_CONTAINER)$$"; then \
+		echo "$(GREEN)✅ Docker 容器启动成功！$(NC)"; \
+		echo "   Milvus: localhost:19530"; \
+		echo "   PostgreSQL: localhost:5432/opspilot"; \
 	else \
-		echo "$(YELLOW)🚀 启动 Milvus 相关容器...$(NC)"; \
-		docker compose -f vector-database.yml up -d; \
-		echo "$(YELLOW)⏳ 等待容器启动...$(NC)"; \
-		sleep 5; \
-		if docker ps --format '{{.Names}}' | grep -q "^$(MILVUS_CONTAINER)$$"; then \
-			echo "$(GREEN)✅ Docker 容器启动成功！$(NC)"; \
-			echo ""; \
-			echo "$(GREEN)📋 运行中的容器:$(NC)"; \
-			docker ps --filter "name=milvus" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | head -10; \
-			echo ""; \
-			echo "$(GREEN)🌐 服务访问地址:$(NC)"; \
-			echo "   Milvus: localhost:19530"; \
-			echo "   Attu (Web UI): http://localhost:8000"; \
-			echo "   MinIO: http://localhost:9001 (admin/minioadmin)"; \
-		else \
-			echo "$(RED)❌ 容器启动失败$(NC)"; \
-			exit 1; \
-		fi; \
+		echo "$(RED)❌ 数据库容器启动失败$(NC)"; \
+		exit 1; \
 	fi
 
 # 停止 Docker 容器
 down:
 	@echo "$(YELLOW)🛑 停止 Docker 容器...$(NC)"
-	@if docker ps --format '{{.Names}}' | grep -q "milvus"; then \
+	@if docker ps --format '{{.Names}}' | grep -Eq "milvus|opspilot-postgres"; then \
 		docker compose -f vector-database.yml down; \
 		echo "$(GREEN)✅ Docker 容器已停止$(NC)"; \
 	else \

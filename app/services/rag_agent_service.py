@@ -4,7 +4,9 @@
 支持真正的流式输出和更好的模型适配。
 """
 
-from typing import Annotated, Any, AsyncGenerator, Dict, Sequence
+import asyncio
+from collections.abc import AsyncGenerator, Sequence
+from typing import Annotated, Any
 
 from langchain.agents import create_agent
 from langchain_core.messages import (
@@ -13,20 +15,21 @@ from langchain_core.messages import (
     RemoveMessage,
     SystemMessage,
 )
+from langchain_qwq import ChatQwen
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.message import REMOVE_ALL_MESSAGES, add_messages
 from loguru import logger
 from typing_extensions import TypedDict
-from langchain_qwq import ChatQwen
 
-from app.config import config
-from app.tools import DEFAULT_LOCAL_AGENT_TOOLS, retrieve_knowledge
 from app.agent.mcp_client import (
+    format_exception_chain,
     get_mcp_client_with_retry,
     load_mcp_tools_safe,
-    format_exception_chain,
     suggest_mcp_transport,
 )
+from app.config import config
+from app.services.conversation_service import conversation_service
+from app.tools import DEFAULT_LOCAL_AGENT_TOOLS, retrieve_knowledge
 
 # 阿里千问大模型和langchain集成参考： https://docs.langchain.com/oss/python/integrations/chat/qwen
 # 注意：需要配置环境变量 DASHSCOPE_API_BASE=https://dashscope.aliyuncs.com/compatible-mode/v1 否则默认访问的是新加坡站点
@@ -35,6 +38,7 @@ from app.agent.mcp_client import (
 
 class AgentState(TypedDict):
     """Agent 状态"""
+
     messages: Annotated[Sequence[BaseMessage], add_messages]
 
 
@@ -70,12 +74,7 @@ def trim_messages_middleware(state: AgentState) -> dict[str, Any] | None:
 
     logger.debug(f"修剪消息历史: {len(messages)} -> {len(new_messages)} 条")
 
-    return {
-        "messages": [
-            RemoveMessage(id=REMOVE_ALL_MESSAGES),
-            *new_messages
-        ]
-    }
+    return {"messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES), *new_messages]}
 
 
 class RagAgentService:
@@ -91,7 +90,6 @@ class RagAgentService:
         self.streaming = streaming
         self.system_prompt = self._build_system_prompt()
 
-
         self.model = ChatQwen(
             model=self.model_name,
             api_key=config.dashscope_api_key,
@@ -105,14 +103,22 @@ class RagAgentService:
         # MCP 客户端（延迟初始化，使用全局管理）
         self.mcp_tools: list = []
 
-        # 创建内存检查点（用于会话管理）
+        # 启动阶段会替换为 PostgreSQL Checkpointer；内存实现仅用于导入期兜底。
         self.checkpointer = MemorySaver()
 
         # Agent 初始化（会在异步方法中完成）
         self.agent = None
         self._agent_initialized = False
 
-        logger.info(f"RAG Agent 服务初始化完成 (ChatQwen), model={self.model_name}, streaming={streaming}")
+        logger.info(
+            f"RAG Agent 服务初始化完成 (ChatQwen), model={self.model_name}, streaming={streaming}"
+        )
+
+    def configure_checkpointer(self, checkpointer: Any) -> None:
+        """在应用启动后注入 PostgreSQL Checkpointer，并重建 Agent。"""
+        self.checkpointer = checkpointer
+        self.agent = None
+        self._agent_initialized = False
 
     async def _initialize_agent(self):
         """异步初始化 Agent（包括 MCP 工具）"""
@@ -130,9 +136,7 @@ class RagAgentService:
         mcp_client = await get_mcp_client_with_retry()
         mcp_tools, mcp_err = await load_mcp_tools_safe(mcp_client)
         if mcp_err:
-            logger.warning(
-                f"MCP 工具加载失败，将仅使用本地工具继续运行:\n{mcp_err}"
-            )
+            logger.warning(f"MCP 工具加载失败，将仅使用本地工具继续运行:\n{mcp_err}")
             self.mcp_tools = []
         else:
             self.mcp_tools = mcp_tools
@@ -147,7 +151,6 @@ class RagAgentService:
         )
 
         self._agent_initialized = True
-
 
         if all_tools:
             tool_names = [tool.name if hasattr(tool, "name") else str(tool) for tool in all_tools]
@@ -188,10 +191,28 @@ class RagAgentService:
     async def _build_query_messages(
         self,
         question: str,
+        session_id: str,
         force_rag: bool,
     ) -> list[BaseMessage]:
-        """构建请求消息；强制模式在调用 Agent 前先完成一次知识库检索。"""
-        messages: list[BaseMessage] = [SystemMessage(content=self.system_prompt)]
+        """从 PostgreSQL 组装“摘要 + 最近窗口 + 当前问题”的上下文。"""
+        summary, memory_messages = await conversation_service.get_memory_context(session_id)
+        messages: list[BaseMessage] = [
+            RemoveMessage(id=REMOVE_ALL_MESSAGES),
+            SystemMessage(content=self.system_prompt),
+        ]
+
+        if summary:
+            messages.append(
+                SystemMessage(
+                    content=(
+                        "以下是较早对话的已确认记忆，仅在与当前问题相关时使用；"
+                        "如与最新检索或用户输入冲突，以最新信息为准。\n\n"
+                        f"会话摘要：\n{summary}"
+                    )
+                )
+            )
+
+        messages.extend(memory_messages)
 
         if force_rag:
             context = await retrieve_knowledge.ainvoke({"query": question})
@@ -209,7 +230,9 @@ class RagAgentService:
                 )
             )
 
-        messages.append(HumanMessage(content=question))
+        # API 会先持久化本轮用户消息，因此通常已位于 memory_messages 中；保留兜底。
+        if not memory_messages or not isinstance(memory_messages[-1], HumanMessage):
+            messages.append(HumanMessage(content=question))
         return messages
 
     async def query(
@@ -233,28 +256,29 @@ class RagAgentService:
 
             logger.info(f"[会话 {session_id}] RAG Agent 收到查询（非流式）: {question}")
 
-            messages = await self._build_query_messages(question, force_rag)
+            messages = await self._build_query_messages(question, session_id, force_rag)
 
             # 构建 Agent 输入
             agent_input = {"messages": messages}
 
             # 配置 thread_id（用于会话持久化）
-            config_dict = {
-                "configurable": {
-                    "thread_id": session_id
-                }
-            }
+            config_dict = {"configurable": {"thread_id": f"rag:{session_id}"}}
 
-            result = await self.agent.ainvoke(
-                input=agent_input,
-                config=config_dict,
+            result = await asyncio.wait_for(
+                self.agent.ainvoke(
+                    input=agent_input,
+                    config=config_dict,
+                ),
+                timeout=config.agent_request_timeout_seconds,
             )
 
             # 提取最终答案
             messages_result = result.get("messages", [])
             if messages_result:
                 last_message = messages_result[-1]
-                answer = last_message.content if hasattr(last_message, 'content') else str(last_message)
+                answer = (
+                    last_message.content if hasattr(last_message, "content") else str(last_message)
+                )
 
                 # 记录工具调用
                 if hasattr(last_message, "tool_calls") and last_message.tool_calls:
@@ -267,10 +291,15 @@ class RagAgentService:
             logger.warning(f"[会话 {session_id}] Agent 返回结果为空")
             return ""
 
+        except TimeoutError as e:
+            logger.error(
+                f"[会话 {session_id}] RAG Agent 请求超时: "
+                f"{config.agent_request_timeout_seconds} 秒"
+            )
+            raise TimeoutError("模型响应超时，请稍后重试或新建对话后再试") from e
         except Exception as e:
             logger.error(
-                f"[会话 {session_id}] RAG Agent 查询失败（非流式）: "
-                f"{format_exception_chain(e)}"
+                f"[会话 {session_id}] RAG Agent 查询失败（非流式）: {format_exception_chain(e)}"
             )
             raise
 
@@ -279,7 +308,7 @@ class RagAgentService:
         question: str,
         session_id: str,
         force_rag: bool = False,
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """
         流式处理用户问题（逐步返回答案片段）
 
@@ -297,38 +326,38 @@ class RagAgentService:
 
             logger.info(f"[会话 {session_id}] RAG Agent 收到查询（流式）: {question}")
 
-            messages = await self._build_query_messages(question, force_rag)
+            messages = await self._build_query_messages(question, session_id, force_rag)
 
             # 构建 Agent 输入
             agent_input = {"messages": messages}
 
             # 配置 thread_id（用于会话持久化）
-            config_dict = {
-                "configurable": {
-                    "thread_id": session_id
-                }
-            }
+            config_dict = {"configurable": {"thread_id": f"rag:{session_id}"}}
 
             async for token, metadata in self.agent.astream(
                 input=agent_input,
                 config=config_dict,
                 stream_mode="messages",
             ):
-                node_name = metadata.get('langgraph_node', 'unknown') if isinstance(metadata, dict) else 'unknown'
+                node_name = (
+                    metadata.get("langgraph_node", "unknown")
+                    if isinstance(metadata, dict)
+                    else "unknown"
+                )
                 message_type = type(token).__name__
 
                 if message_type in ("AIMessage", "AIMessageChunk"):
-                    content_blocks = getattr(token, 'content_blocks', None)
+                    content_blocks = getattr(token, "content_blocks", None)
 
                     if content_blocks and isinstance(content_blocks, list):
                         for block in content_blocks:
-                            if isinstance(block, dict) and block.get('type') == 'text':
-                                text_content = block.get('text', '')
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                text_content = block.get("text", "")
                                 if text_content:
                                     yield {
                                         "type": "content",
                                         "data": text_content,
-                                        "node": node_name
+                                        "node": node_name,
                                     }
 
             logger.info(f"[会话 {session_id}] RAG Agent 查询完成（流式）")
@@ -336,96 +365,17 @@ class RagAgentService:
 
         except Exception as e:
             detail = format_exception_chain(e)
-            logger.error(
-                f"[会话 {session_id}] RAG Agent 查询失败（流式）: {detail}"
-            )
+            logger.error(f"[会话 {session_id}] RAG Agent 查询失败（流式）: {detail}")
             yield {"type": "error", "data": detail}
 
-    def get_session_history(self, session_id: str) -> list:
-        """
-        获取会话历史（从 MemorySaver checkpointer 中读取）
-
-        Args:
-            session_id: 会话ID（即 thread_id）
-
-        Returns:
-            list: 消息历史列表 [{"role": "user|assistant", "content": "...", "timestamp": "..."}]
-        """
-        try:
-            # 使用 checkpointer 的 get 方法获取最新的检查点
-            config = {"configurable": {"thread_id": session_id}}
-            
-            # 获取该 thread 的最新检查点
-            checkpoint_tuple = self.checkpointer.get(config)
-            
-            if not checkpoint_tuple:
-                logger.info(f"获取会话历史: {session_id}, 消息数量: 0")
-                return []
-            
-            # checkpoint_tuple 可能是命名元组或普通元组，安全地提取 checkpoint
-            # 通常第一个元素是 checkpoint 数据
-            if hasattr(checkpoint_tuple, 'checkpoint'):
-                checkpoint_data = checkpoint_tuple.checkpoint  # type: ignore
-            else:
-                # 如果是普通元组，第一个元素是 checkpoint
-                checkpoint_data = checkpoint_tuple[0] if checkpoint_tuple else {}
-            
-            # 从检查点中提取消息
-            messages = checkpoint_data.get("channel_values", {}).get("messages", [])
-            
-            # 转换为前端需要的格式
-            history = []
-            for msg in messages:
-                # 跳过系统消息
-                if isinstance(msg, SystemMessage):
-                    continue
-                    
-                role = "user" if isinstance(msg, HumanMessage) else "assistant"
-                content = msg.content if hasattr(msg, 'content') else str(msg)
-                
-                # 提取时间戳（如果有的话）
-                timestamp = getattr(msg, 'timestamp', None)
-                if timestamp:
-                    history.append({
-                        "role": role,
-                        "content": content,
-                        "timestamp": timestamp
-                    })
-                else:
-                    from datetime import datetime
-                    history.append({
-                        "role": role,
-                        "content": content,
-                        "timestamp": datetime.now().isoformat()
-                    })
-            
-            logger.info(f"获取会话历史: {session_id}, 消息数量: {len(history)}")
-            return history
-            
-        except Exception as e:
-            logger.error(f"获取会话历史失败: {session_id}, 错误: {e}")
-            return []
-
-    def clear_session(self, session_id: str) -> bool:
-        """
-        清空会话历史（从 MemorySaver checkpointer 中删除）
-
-        Args:
-            session_id: 会话ID（即 thread_id）
-
-        Returns:
-            bool: 是否成功
-        """
-        try:
-            # 使用 checkpointer 的 delete_thread 方法删除该 thread 的所有检查点
-            self.checkpointer.delete_thread(session_id)
-            
-            logger.info(f"已清除会话历史: {session_id}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"清空会话历史失败: {session_id}, 错误: {e}")
-            return False
+    async def clear_checkpoint(self, session_id: str) -> None:
+        """删除会话的 Agent Checkpoint；聊天消息由 PostgreSQL 会话服务负责。"""
+        thread_id = f"rag:{session_id}"
+        delete_async = getattr(self.checkpointer, "adelete_thread", None)
+        if delete_async is not None:
+            await delete_async(thread_id)
+        else:
+            self.checkpointer.delete_thread(thread_id)
 
     async def cleanup(self):
         """清理资源"""

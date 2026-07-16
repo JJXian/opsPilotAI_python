@@ -4,13 +4,17 @@
 """
 
 import json
+
 from fastapi import APIRouter, HTTPException
-from sse_starlette.sse import EventSourceResponse
-from app.models.request import ChatRequest, ClearRequest
-from app.models.response import SessionInfoResponse, ApiResponse
-from app.agent.mcp_client import format_exception_chain
-from app.services.rag_agent_service import rag_agent_service
 from loguru import logger
+from sse_starlette.sse import EventSourceResponse
+
+from app.agent.mcp_client import format_exception_chain
+from app.models.request import ChatRequest, ClearRequest
+from app.models.response import ApiResponse, SessionInfoResponse
+from app.services.aiops_service import aiops_service
+from app.services.conversation_service import conversation_service
+from app.services.rag_agent_service import rag_agent_service
 
 router = APIRouter()
 
@@ -36,22 +40,21 @@ async def chat(request: ChatRequest):
     """
     try:
         logger.info(f"[会话 {request.id}] 收到快速对话请求: {request.question}")
+        await conversation_service.add_message(request.id, "user", request.question)
         answer = await rag_agent_service.query(
             request.question,
             session_id=request.id,
             force_rag=request.force_rag,
         )
+        await conversation_service.add_message(request.id, "assistant", answer)
+        await conversation_service.maybe_refresh_summary(request.id, rag_agent_service.model)
 
         logger.info(f"[会话 {request.id}] 快速对话完成")
 
         return {
             "code": 200,
             "message": "success",
-            "data": {
-                "success": True,
-                "answer": answer,
-                "errorMessage": None
-            }
+            "data": {"success": True, "answer": answer, "errorMessage": None},
         }
 
     except Exception as e:
@@ -59,11 +62,7 @@ async def chat(request: ChatRequest):
         return {
             "code": 500,
             "message": "error",
-            "data": {
-                "success": False,
-                "answer": None,
-                "errorMessage": str(e)
-            }
+            "data": {"success": False, "answer": None, "errorMessage": str(e)},
         }
 
 
@@ -94,7 +93,9 @@ async def chat_stream(request: ChatRequest):
     logger.info(f"[会话 {request.id}] 收到流式对话请求: {request.question}")
 
     async def event_generator():
+        full_answer = ""
         try:
+            await conversation_service.add_message(request.id, "user", request.question)
             async for chunk in rag_agent_service.query_stream(
                 request.question,
                 session_id=request.id,
@@ -108,56 +109,65 @@ async def chat_stream(request: ChatRequest):
                     # 调试信息，可以选择发送或忽略
                     yield {
                         "event": "message",
-                        "data": json.dumps({
-                            "type": "debug",
-                            "node": chunk.get("node", "unknown"),
-                            "message_type": chunk.get("message_type", "unknown")
-                        }, ensure_ascii=False)
+                        "data": json.dumps(
+                            {
+                                "type": "debug",
+                                "node": chunk.get("node", "unknown"),
+                                "message_type": chunk.get("message_type", "unknown"),
+                            },
+                            ensure_ascii=False,
+                        ),
                     }
                 elif chunk_type == "tool_call":
                     # 发送工具调用事件（可选，前端可以显示工具调用状态）
                     yield {
                         "event": "message",
-                        "data": json.dumps({
-                            "type": "tool_call",
-                            "data": chunk_data
-                        }, ensure_ascii=False)
+                        "data": json.dumps(
+                            {"type": "tool_call", "data": chunk_data}, ensure_ascii=False
+                        ),
                     }
                 elif chunk_type == "search_results":
                     # 发送检索结果（可选，前端可以忽略）
                     yield {
                         "event": "message",
-                        "data": json.dumps({
-                            "type": "search_results",
-                            "data": chunk_data
-                        }, ensure_ascii=False)
+                        "data": json.dumps(
+                            {"type": "search_results", "data": chunk_data}, ensure_ascii=False
+                        ),
                     }
                 elif chunk_type == "content":
+                    full_answer += str(chunk_data or "")
                     # 发送内容块 - 关键：data 必须是 JSON 字符串
                     yield {
                         "event": "message",
-                        "data": json.dumps({
-                            "type": "content",
-                            "data": chunk_data
-                        }, ensure_ascii=False)
+                        "data": json.dumps(
+                            {"type": "content", "data": chunk_data}, ensure_ascii=False
+                        ),
                     }
                 elif chunk_type == "complete":
+                    await conversation_service.add_message(request.id, "assistant", full_answer)
+                    await conversation_service.maybe_refresh_summary(
+                        request.id, rag_agent_service.model
+                    )
                     # 发送完成信号
                     yield {
                         "event": "message",
-                        "data": json.dumps({
-                            "type": "done",
-                            "data": chunk_data
-                        }, ensure_ascii=False)
+                        "data": json.dumps(
+                            {"type": "done", "data": chunk_data}, ensure_ascii=False
+                        ),
                     }
                 elif chunk_type == "error":
+                    await conversation_service.add_message(
+                        request.id,
+                        "assistant",
+                        str(chunk_data),
+                        status="failed",
+                    )
                     # 发送错误信息
                     yield {
                         "event": "message",
-                        "data": json.dumps({
-                            "type": "error",
-                            "data": str(chunk_data)
-                        }, ensure_ascii=False)
+                        "data": json.dumps(
+                            {"type": "error", "data": str(chunk_data)}, ensure_ascii=False
+                        ),
                     }
 
             logger.info(f"[会话 {request.id}] 流式对话完成")
@@ -166,10 +176,7 @@ async def chat_stream(request: ChatRequest):
             logger.error(f"流式对话接口错误: {format_exception_chain(e)}")
             yield {
                 "event": "message",
-                "data": json.dumps({
-                    "type": "error",
-                    "data": str(e)
-                }, ensure_ascii=False)
+                "data": json.dumps({"type": "error", "data": str(e)}, ensure_ascii=False),
             }
 
     return EventSourceResponse(event_generator())
@@ -186,18 +193,20 @@ async def clear_session(request: ClearRequest):
         操作结果
     """
     try:
-        success = rag_agent_service.clear_session(request.session_id)
+        success = await conversation_service.clear_session(request.session_id)
+        await rag_agent_service.clear_checkpoint(request.session_id)
+        await aiops_service.clear_checkpoint(request.session_id)
         logger.info(f"清空会话: {request.session_id}, 结果: {success}")
 
         return ApiResponse(
             status="success" if success else "error",
             message="会话已清空" if success else "清空会话失败",
-            data=None
+            data=None,
         )
 
     except Exception as e:
         logger.error(f"清空会话错误: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/chat/session/{session_id}", response_model=SessionInfoResponse)
@@ -211,14 +220,49 @@ async def get_session_info(session_id: str) -> SessionInfoResponse:
         会话信息
     """
     try:
-        history = rag_agent_service.get_session_history(session_id)
+        history = await conversation_service.get_messages(session_id)
+        normalized_history = [
+            {
+                "role": item["role"],
+                "content": item["content"],
+                "timestamp": item["created_at"].isoformat(),
+            }
+            for item in history
+            if item["role"] in {"user", "assistant"}
+        ]
 
         return SessionInfoResponse(
             session_id=session_id,
-            message_count=len(history),
-            history=history
+            message_count=len(normalized_history),
+            history=normalized_history,
         )
 
     except Exception as e:
         logger.error(f"获取会话信息错误: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/chat/sessions")
+async def list_sessions(page: int = 1, page_size: int = 20):
+    """分页获取持久化会话列表。"""
+    try:
+        return await conversation_service.list_sessions(page, page_size)
+    except Exception as e:
+        logger.error(f"获取会话列表错误: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.delete("/chat/session/{session_id}", response_model=ApiResponse)
+async def delete_session(session_id: str) -> ApiResponse:
+    """删除会话消息、摘要和两个 Agent 的 Checkpoint。"""
+    try:
+        deleted = await conversation_service.clear_session(session_id)
+        await rag_agent_service.clear_checkpoint(session_id)
+        await aiops_service.clear_checkpoint(session_id)
+        return ApiResponse(
+            status="success" if deleted else "error",
+            message="会话已删除" if deleted else "会话不存在",
+        )
+    except Exception as e:
+        logger.error(f"删除会话错误: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e

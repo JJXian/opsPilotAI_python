@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     # Reranker 会将候选文本发送给 DashScope；默认关闭，由部署方显式确认后开启。
     rag_rerank_enabled: bool = False
     rag_rerank_model: str = "gte-rerank-v2"
+    agentic_rag_max_retrieval_attempts: int = 2
 
     # 文档分块配置
     chunk_max_size: int = 800

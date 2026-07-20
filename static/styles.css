@@ -1001,6 +1001,28 @@ button {
     border-color: #b9e6fe;
 }
 
+.agent-trace {
+    margin: 0 0 10px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.agent-trace summary {
+    cursor: pointer;
+    color: #475467;
+    font-weight: 700;
+}
+
+.agent-trace-list {
+    margin: 8px 0 0 18px;
+    padding: 0;
+    color: var(--muted);
+}
+
+.agent-trace-list li + li {
+    margin-top: 4px;
+}
+
 .aiops-details {
     width: 100%;
     margin-bottom: 12px;

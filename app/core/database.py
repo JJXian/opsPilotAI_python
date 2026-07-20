@@ -40,6 +40,20 @@ SCHEMA_STATEMENTS = (
     CREATE INDEX IF NOT EXISTS idx_chat_messages_session_created_at
     ON chat_messages (session_id, created_at ASC)
     """,
+    """
+    CREATE TABLE IF NOT EXISTS agent_audit_logs (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        request_id TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_agent_audit_logs_session_created_at
+    ON agent_audit_logs (session_id, created_at ASC)
+    """,
 )
 
 

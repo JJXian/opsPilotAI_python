@@ -12,6 +12,7 @@ from sse_starlette.sse import EventSourceResponse
 from app.agent.mcp_client import format_exception_chain
 from app.models.request import ChatRequest, ClearRequest
 from app.models.response import ApiResponse, SessionInfoResponse
+from app.services.agentic_rag_service import agentic_rag_service
 from app.services.aiops_service import aiops_service
 from app.services.conversation_service import conversation_service
 from app.services.rag_agent_service import rag_agent_service
@@ -41,20 +42,31 @@ async def chat(request: ChatRequest):
     try:
         logger.info(f"[会话 {request.id}] 收到快速对话请求: {request.question}")
         await conversation_service.add_message(request.id, "user", request.question)
-        answer = await rag_agent_service.query(
+        result = await agentic_rag_service.query(
             request.question,
             session_id=request.id,
             force_rag=request.force_rag,
         )
-        await conversation_service.add_message(request.id, "assistant", answer)
-        await conversation_service.maybe_refresh_summary(request.id, rag_agent_service.model)
+        answer = result["answer"]
+        await conversation_service.add_message(
+            request.id,
+            "assistant",
+            answer,
+            tool_payload={"agentic_trace": result.get("trace", [])},
+        )
+        await conversation_service.maybe_refresh_summary(request.id, agentic_rag_service.model)
 
         logger.info(f"[会话 {request.id}] 快速对话完成")
 
         return {
             "code": 200,
             "message": "success",
-            "data": {"success": True, "answer": answer, "errorMessage": None},
+            "data": {
+                "success": True,
+                "answer": answer,
+                "trace": result.get("trace", []),
+                "errorMessage": None,
+            },
         }
 
     except Exception as e:
@@ -96,7 +108,7 @@ async def chat_stream(request: ChatRequest):
         full_answer = ""
         try:
             await conversation_service.add_message(request.id, "user", request.question)
-            async for chunk in rag_agent_service.query_stream(
+            async for chunk in agentic_rag_service.run(
                 request.question,
                 session_id=request.id,
                 force_rag=request.force_rag,
@@ -105,7 +117,14 @@ async def chat_stream(request: ChatRequest):
                 chunk_data = chunk.get("data", None)
 
                 # 处理调试类型消息（新增）
-                if chunk_type == "debug":
+                if chunk_type == "trace":
+                    yield {
+                        "event": "message",
+                        "data": json.dumps(
+                            {"type": "trace", "data": chunk_data}, ensure_ascii=False
+                        ),
+                    }
+                elif chunk_type == "debug":
                     # 调试信息，可以选择发送或忽略
                     yield {
                         "event": "message",
@@ -144,10 +163,23 @@ async def chat_stream(request: ChatRequest):
                         ),
                     }
                 elif chunk_type == "complete":
-                    await conversation_service.add_message(request.id, "assistant", full_answer)
-                    await conversation_service.maybe_refresh_summary(
-                        request.id, rag_agent_service.model
+                    completion = chunk_data or {}
+                    full_answer = str(completion.get("answer", full_answer))
+                    await conversation_service.add_message(
+                        request.id,
+                        "assistant",
+                        full_answer,
+                        tool_payload={"agentic_trace": completion.get("trace", [])},
                     )
+                    await conversation_service.maybe_refresh_summary(
+                        request.id, agentic_rag_service.model
+                    )
+                    yield {
+                        "event": "message",
+                        "data": json.dumps(
+                            {"type": "content", "data": full_answer}, ensure_ascii=False
+                        ),
+                    }
                     # 发送完成信号
                     yield {
                         "event": "message",
@@ -195,6 +227,7 @@ async def clear_session(request: ClearRequest):
     try:
         success = await conversation_service.clear_session(request.session_id)
         await rag_agent_service.clear_checkpoint(request.session_id)
+        await agentic_rag_service.clear_checkpoint(request.session_id)
         await aiops_service.clear_checkpoint(request.session_id)
         logger.info(f"清空会话: {request.session_id}, 结果: {success}")
 

@@ -803,7 +803,8 @@ class SuperBizAgentApp {
                 if (chatResponse && chatResponse.success) {
                     // 成功：添加实际响应消息（即使 answer 为空也显示）
                     const answer = chatResponse.answer || '（无回复内容）';
-                    this.addMessage('assistant', answer);
+                    const assistantMessage = this.addMessage('assistant', answer);
+                    this.addAgentTracePanel(assistantMessage, chatResponse.trace || []);
                 } else if (chatResponse && chatResponse.errorMessage) {
                     // 业务错误
                     throw new Error(chatResponse.errorMessage);
@@ -846,6 +847,7 @@ class SuperBizAgentApp {
             
             // 创建助手消息元素
             const assistantMessageElement = this.addMessage('assistant', '', true);
+            const traceList = this.addAgentTracePanel(assistantMessageElement, []);
             let fullResponse = '';
 
             // 处理流式响应
@@ -919,6 +921,8 @@ class SuperBizAgentApp {
                                             this.highlightCodeBlocks(messageContent);
                                             this.scrollToBottom();
                                         }
+                                    } else if (sseMessage.type === 'trace') {
+                                        this.appendAgentTrace(traceList, sseMessage.data);
                                     } else if (sseMessage.type === 'done') {
                                         console.log('[SSE调试] 收到done标记，流结束');
                                         this.handleStreamComplete(assistantMessageElement, fullResponse);
@@ -1032,6 +1036,38 @@ class SuperBizAgentApp {
         }
 
         return messageDiv;
+    }
+
+    addAgentTracePanel(messageElement, traces) {
+        if (!messageElement || !Array.isArray(traces)) {
+            return null;
+        }
+
+        const details = document.createElement('details');
+        details.className = 'agent-trace';
+        const summary = document.createElement('summary');
+        summary.textContent = '执行轨迹';
+        const list = document.createElement('ol');
+        list.className = 'agent-trace-list';
+        details.appendChild(summary);
+        details.appendChild(list);
+
+        const wrapper = messageElement.querySelector('.message-content-wrapper');
+        if (wrapper) {
+            wrapper.insertBefore(details, wrapper.firstChild);
+        }
+        traces.forEach((trace) => this.appendAgentTrace(list, trace));
+        return list;
+    }
+
+    appendAgentTrace(traceList, trace) {
+        if (!traceList || !trace) {
+            return;
+        }
+        const item = document.createElement('li');
+        item.textContent = trace.message || String(trace);
+        traceList.appendChild(item);
+        this.scrollToBottom();
     }
 
     // 添加带加载动画的消息

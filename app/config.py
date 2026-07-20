@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     rag_rerank_model: str = "gte-rerank-v2"
     agentic_rag_max_retrieval_attempts: int = 2
 
+    # Bug 修复 Agent：仅允许读取该目录内的源码与 Git 历史，默认是当前项目根目录。
+    bugfix_repository_root: str = "."
+    bugfix_max_search_results: int = 12
+
     # 文档分块配置
     chunk_max_size: int = 800
     chunk_overlap: int = 100

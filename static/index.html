@@ -86,7 +86,7 @@
                             <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                             <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
-                        <span>AI Ops</span>
+                        <span>Bug 修复</span>
                     </button>
                 </div>
             </header>
@@ -95,7 +95,7 @@
                 <div class="chat-container">
                     <div class="welcome-greeting" id="welcomeGreeting">
                         <span class="welcome-kicker">OpsPilotAI Console</span>
-                        <p>你好，我可以帮你查询知识库、分析告警并生成运维建议。</p>
+                        <p>你好，我可以帮你查询知识库、分析日志并生成可审查的修复建议。</p>
                     </div>
                     <div class="chat-messages" id="chatMessages">
                     </div>
@@ -214,15 +214,42 @@
         </section>
     </div>
 
+    <div class="bugfix-modal" id="bugfixModal" aria-hidden="true">
+        <div class="bugfix-modal-backdrop" id="bugfixModalBackdrop"></div>
+        <section class="bugfix-panel" role="dialog" aria-modal="true" aria-labelledby="bugfixTitle">
+            <header class="bugfix-panel-header">
+                <div>
+                    <span class="panel-kicker">BUG FIX AGENT</span>
+                    <h2 id="bugfixTitle">日志驱动 Bug 定位</h2>
+                </div>
+                <button class="icon-btn" id="closeBugfixBtn" title="关闭" aria-label="关闭">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M6 6L18 18M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                </button>
+            </header>
+            <div class="bugfix-panel-body">
+                <label class="bugfix-label" for="bugfixLogInput">Python 异常堆栈</label>
+                <textarea id="bugfixLogInput" class="bugfix-log-input" rows="14" placeholder="粘贴完整 Python Traceback，例如：&#10;Traceback (most recent call last):&#10;  File &quot;app/services/example.py&quot;, line 42, in run&#10;    ...&#10;ValueError: ..."></textarea>
+                <label class="bugfix-diff-option">
+                    <input type="checkbox" id="bugfixDiffToggle">
+                    <span>生成建议 Diff（仅展示，不会修改文件）</span>
+                </label>
+            </div>
+            <footer class="bugfix-panel-footer">
+                <button class="bugfix-cancel-btn" id="cancelBugfixBtn">取消</button>
+                <button class="bugfix-submit-btn" id="submitBugfixBtn">开始定位</button>
+            </footer>
+        </section>
+    </div>
+
     <!-- 加载遮罩层 -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-content">
             <div class="loading-spinner"></div>
-            <div class="loading-text">智能运维分析中，请稍候...</div>
+            <div class="loading-text">Bug 修复分析中，请稍候...</div>
             <div class="loading-subtext">后端正在处理，请耐心等待</div>
         </div>
     </div>
 
-    <script src="/static/app.js?v=20260716-context-budget"></script>
+    <script src="/static/app.js?v=20260720-bugfix-agent"></script>
 </body>
 </html>

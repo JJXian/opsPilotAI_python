@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
-from app.api import aiops, chat, file, health
+from app.api import aiops, bugfix, chat, file, health
 from app.config import config
 from app.core.checkpointer import checkpointer_manager
 from app.core.database import database_manager
@@ -20,6 +20,7 @@ from app.core.milvus_client import milvus_manager
 from app.services.agentic_rag_service import agentic_rag_service
 from app.services.aiops_service import aiops_service
 from app.services.bm25_retrieval_service import bm25_retrieval_service
+from app.services.bugfix_service import bugfix_service
 from app.services.rag_agent_service import rag_agent_service
 
 
@@ -39,6 +40,7 @@ async def lifespan(app: FastAPI):
     rag_agent_service.configure_checkpointer(checkpointer)
     agentic_rag_service.configure_checkpointer(checkpointer)
     aiops_service.configure_checkpointer(checkpointer)
+    bugfix_service.configure_checkpointer(checkpointer)
     logger.info("✅ 会话记忆与 Agent Checkpointer 已持久化到 PostgreSQL")
 
     # 连接 Milvus
@@ -87,6 +89,7 @@ app.include_router(health.router, tags=["健康检查"])
 app.include_router(chat.router, prefix="/api", tags=["对话"])
 app.include_router(file.router, prefix="/api", tags=["文件管理"])
 app.include_router(aiops.router, prefix="/api", tags=["AIOps智能运维"])
+app.include_router(bugfix.router, prefix="/api", tags=["Bug 修复 Agent"])
 
 # 挂载静态文件
 static_dir = "static"

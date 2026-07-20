@@ -14,6 +14,7 @@ from app.models.request import ChatRequest, ClearRequest
 from app.models.response import ApiResponse, SessionInfoResponse
 from app.services.agentic_rag_service import agentic_rag_service
 from app.services.aiops_service import aiops_service
+from app.services.bugfix_service import bugfix_service
 from app.services.conversation_service import conversation_service
 from app.services.rag_agent_service import rag_agent_service
 
@@ -229,6 +230,7 @@ async def clear_session(request: ClearRequest):
         await rag_agent_service.clear_checkpoint(request.session_id)
         await agentic_rag_service.clear_checkpoint(request.session_id)
         await aiops_service.clear_checkpoint(request.session_id)
+        await bugfix_service.clear_checkpoint(request.session_id)
         logger.info(f"清空会话: {request.session_id}, 结果: {success}")
 
         return ApiResponse(

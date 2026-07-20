@@ -1186,6 +1186,138 @@ button {
     transform: translateY(0);
 }
 
+.bugfix-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.18s ease, visibility 0.18s ease;
+}
+
+.bugfix-modal.is-open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.bugfix-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.42);
+    backdrop-filter: blur(3px);
+}
+
+.bugfix-panel {
+    width: min(760px, 100%);
+    position: relative;
+    z-index: 1;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    transform: translateY(8px);
+    transition: transform 0.18s ease;
+}
+
+.bugfix-modal.is-open .bugfix-panel {
+    transform: translateY(0);
+}
+
+.bugfix-panel-header,
+.bugfix-panel-footer {
+    min-height: 68px;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.bugfix-panel-header {
+    border-bottom: 1px solid var(--border);
+}
+
+.bugfix-panel-header h2 {
+    margin-top: 3px;
+    color: var(--text);
+    font-size: 19px;
+}
+
+.bugfix-panel-body {
+    padding: 20px;
+}
+
+.bugfix-label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.bugfix-log-input {
+    width: 100%;
+    min-height: 260px;
+    resize: vertical;
+    padding: 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    background: var(--bg-soft);
+    color: var(--text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.bugfix-log-input:focus {
+    outline: 3px solid rgba(64, 158, 255, 0.2);
+    border-color: var(--primary);
+}
+
+.bugfix-diff-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    color: #475467;
+    font-size: 13px;
+}
+
+.bugfix-panel-footer {
+    justify-content: flex-end;
+    border-top: 1px solid var(--border);
+}
+
+.bugfix-cancel-btn,
+.bugfix-submit-btn {
+    min-width: 76px;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.bugfix-cancel-btn {
+    border: 1px solid var(--border);
+    background: #ffffff;
+    color: #475467;
+}
+
+.bugfix-submit-btn {
+    background: var(--primary);
+    color: #ffffff;
+}
+
+.bugfix-submit-btn:hover {
+    background: var(--primary-dark);
+}
+
 .knowledge-panel-header {
     min-height: 76px;
     padding: 16px 20px;
@@ -1538,6 +1670,10 @@ button {
     }
 
     .knowledge-modal {
+        padding: 10px;
+    }
+
+    .bugfix-modal {
         padding: 10px;
     }
 

@@ -1,7 +1,7 @@
 [project]
-name = "super-biz-agent-py"
+name = "devpilot-ai-assistant"
 version = "1.2.1"
-description = "基于 LangChain 的智能业务代理系统 - 支持 RAG 知识库和 AIOps 智能运维"
+description = "基于 LangChain 的智能研发知识库与 Bugfix Agent 系统 - 支持 RAG 问答和日志驱动代码定位"
 authors = [{name = "chief"}]
 readme = "README.md"
 requires-python = ">=3.11,<3.14"

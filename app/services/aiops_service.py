@@ -146,7 +146,7 @@ class AIOpsService:
             yield {"type": "error", "stage": "error", "message": f"任务执行出错: {str(e)}"}
 
     async def clear_checkpoint(self, session_id: str) -> None:
-        """删除该会话的 AIOps 工作流状态。"""
+        """删除该会话的兼容诊断工作流状态。"""
         thread_id = f"aiops:{session_id}"
         delete_async = getattr(self.checkpointer, "adelete_thread", None)
         if delete_async is not None:
@@ -156,7 +156,7 @@ class AIOpsService:
 
     async def diagnose(self, session_id: str = "default") -> AsyncGenerator[dict[str, Any], None]:
         """
-        AIOps 诊断接口（兼容旧接口）
+        历史诊断接口（兼容旧接口）
 
         Args:
             session_id: 会话ID
@@ -164,7 +164,7 @@ class AIOpsService:
         Yields:
             Dict[str, Any]: 诊断过程的流式事件
         """
-        # 使用固定的 AIOps 任务描述
+        # 使用固定的历史诊断任务描述
         from textwrap import dedent
 
         aiops_task = dedent("""诊断当前系统是否存在告警，如果存在告警请详细分析告警原因并生成诊断报告，诊断报告输出格式要求：

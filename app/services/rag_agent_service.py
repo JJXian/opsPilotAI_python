@@ -97,7 +97,7 @@ class RagAgentService:
             streaming=streaming,
         )
 
-        # 定义基础工具（与 AIOps Planner/Executor 使用同一套默认本地工具）
+        # 定义基础工具：知识库、时间与兼容监控查询工具。
         self.tools = list(DEFAULT_LOCAL_AGENT_TOOLS)
 
         # MCP 客户端（延迟初始化，使用全局管理）

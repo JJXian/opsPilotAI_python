@@ -69,9 +69,9 @@ async def lifespan(app: FastAPI):
 
 # 创建 FastAPI 应用
 app = FastAPI(
-    title=config.app_name,
+    title="DevPilot 智能研发系统",
     version=config.app_version,
-    description="基于 LangChain 的智能oncall运维系统",
+    description="基于 LangChain 的智能研发知识库与 Bugfix Agent 系统",
     lifespan=lifespan,
 )
 
@@ -88,8 +88,8 @@ app.add_middleware(
 app.include_router(health.router, tags=["健康检查"])
 app.include_router(chat.router, prefix="/api", tags=["对话"])
 app.include_router(file.router, prefix="/api", tags=["文件管理"])
-app.include_router(aiops.router, prefix="/api", tags=["AIOps智能运维"])
 app.include_router(bugfix.router, prefix="/api", tags=["Bug 修复 Agent"])
+app.include_router(aiops.router, prefix="/api", tags=["兼容诊断接口"])
 
 # 挂载静态文件
 static_dir = "static"

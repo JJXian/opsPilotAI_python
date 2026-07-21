@@ -1,6 +1,6 @@
 # MCP Servers
 
-为 AIOps 智能诊断提供日志查询和监控数据工具。
+为 DevPilot 提供兼容的日志查询和监控数据工具。当前主链路聚焦 RAG 知识库问答与 Bugfix Agent，这些 MCP 服务保留用于历史排障和系统诊断场景。
 
 ## 📚 服务列表
 
@@ -48,10 +48,10 @@ python mcp_servers/monitor_server.py
 
 ## 💡 使用示例
 
-### AIOps 诊断场景
+### 兼容诊断场景
 
 ```
-用户: data-sync-service 出现告警，请排查
+用户: data-sync-service 出现异常日志或告警，请辅助排查
 
 Agent 自动执行:
 1. list_all_services() → 查看所有服务状态

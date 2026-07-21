@@ -232,8 +232,8 @@ class ConversationService:
             transcript_chars += len(item)
         transcript = "\n".join(reversed(transcript_parts))
         prompt = (
-            "请增量维护一份简洁的运维会话记忆。保留服务名、环境、告警、已确认事实、"
-            "工具查询结果、用户约束、未解决问题和下一步；不要编造事实。\n\n"
+            "请增量维护一份简洁的研发问答与排障会话记忆。保留项目、模块、错误信息、"
+            "代码位置、已确认事实、工具查询结果、用户约束、未解决问题和下一步；不要编造事实。\n\n"
             f"已有摘要：\n{session['summary'] or '（无）'}\n\n"
             f"新增历史：\n{transcript}\n\n"
             "只输出更新后的摘要。"

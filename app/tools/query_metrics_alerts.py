@@ -159,7 +159,7 @@ def query_prometheus_alerts() -> str:
     """查询 Prometheus 服务端当前活动告警（HTTP GET /api/v1/alerts）。
 
     适用场景：用户关心「有没有告警」「哪些规则在 firing/pending」「最近触发了什么告警」
-    「排查监控告警」「和 Prometheus 告警规则相关的现状」等运维/可观测性问题；无需用户
+    「排查监控告警」「和 Prometheus 告警规则相关的现状」等系统可观测性问题；无需用户
     提供参数，直接调用即可拉取服务端已聚合的告警列表。
 
     行为说明：向配置项 `prometheus_base_url` 指向的 Prometheus 拉取告警；结果按激活时间

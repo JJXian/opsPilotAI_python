@@ -1,5 +1,5 @@
-// SuperBizAgent 前端应用
-class SuperBizAgentApp {
+// DevPilot 前端应用
+class DevPilotApp {
     constructor() {
         this.apiBaseUrl = 'http://localhost:9900/api';
         this.currentMode = 'stream'; // 'quick' 或 'stream'
@@ -719,7 +719,7 @@ class SuperBizAgentApp {
         // 更新输入框状态
         if (this.messageInput) {
             this.messageInput.disabled = this.isStreaming;
-            this.messageInput.placeholder = '问问OpsPilotAI';
+            this.messageInput.placeholder = '问问 DevPilot';
         }
     }
 
@@ -1578,7 +1578,7 @@ class SuperBizAgentApp {
     }
 
     // 发送 Bug 修复请求（SSE 流式模式）
-    async sendAIOpsRequest(loadingMessageElement, log, includeDiff) {
+    async sendBugfixRequest(loadingMessageElement, log, includeDiff) {
         const response = await fetch(`${this.apiBaseUrl}/bugfix`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1611,12 +1611,12 @@ class SuperBizAgentApp {
                         fullResponse = event.report || '';
                     } else if (event.type === 'complete') {
                         fullResponse = event.response || fullResponse;
-                        this.updateAIOpsMessage(loadingMessageElement, fullResponse, details);
+                        this.updateBugfixMessage(loadingMessageElement, fullResponse, details);
                         return;
                     } else if (event.type === 'error') {
                         throw new Error(event.message || 'Bug 修复分析失败');
                     }
-                    this.updateAIOpsStreamContent(loadingMessageElement, details.map((item) => `- ${item}`).join('\n'));
+                    this.updateBugfixStreamContent(loadingMessageElement, details.map((item) => `- ${item}`).join('\n'));
                 }
             }
         } finally {
@@ -1624,11 +1624,11 @@ class SuperBizAgentApp {
         }
     }
 
-    // 更新智能运维流式内容（实时显示）
-    updateAIOpsStreamContent(messageElement, content) {
+    // 更新 Bugfix Agent 流式内容（实时显示）
+    updateBugfixStreamContent(messageElement, content) {
         if (!messageElement) return;
         
-        // 添加 aiops-message 类
+        // 复用历史诊断消息样式
         messageElement.classList.add('aiops-message');
         
         const messageContentWrapper = messageElement.querySelector('.message-content-wrapper');
@@ -1645,9 +1645,9 @@ class SuperBizAgentApp {
         }
     }
 
-    // 更新智能运维消息（带折叠详情）
-    updateAIOpsMessage(messageElement, response, details) {
-        console.log('updateAIOpsMessage 被调用');
+    // 更新 Bugfix Agent 消息（带折叠详情）
+    updateBugfixMessage(messageElement, response, details) {
+        console.log('updateBugfixMessage 被调用');
         console.log('messageElement:', messageElement);
         console.log('response:', response);
         console.log('response length:', response ? response.length : 0);
@@ -1656,10 +1656,10 @@ class SuperBizAgentApp {
         if (!messageElement) {
             // 如果没有传入消息元素，则创建新消息
             console.log('messageElement 为空，创建新消息');
-            return this.addAIOpsMessage(response, details);
+            return this.addBugfixMessage(response, details);
         }
 
-        // 添加aiops-message类
+        // 复用历史诊断消息样式
         messageElement.classList.add('aiops-message');
 
         // 获取消息内容包装器
@@ -1749,8 +1749,8 @@ class SuperBizAgentApp {
         return messageElement;
     }
 
-    // 添加智能运维消息（带折叠详情）- 保留用于兼容性
-    addAIOpsMessage(response, details) {
+    // 添加 Bugfix Agent 消息（带折叠详情）
+    addBugfixMessage(response, details) {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message assistant aiops-message';
 
@@ -1862,14 +1862,14 @@ class SuperBizAgentApp {
         this.closeBugfixModal();
 
         const loadingMessage = this.addLoadingMessage('正在解析日志并定位代码...');
-        this.currentAIOpsMessage = loadingMessage;
+        this.currentBugfixMessage = loadingMessage;
         
         // 设置发送状态
         this.isStreaming = true;
         this.updateUI();
 
         try {
-            await this.sendAIOpsRequest(loadingMessage, log, includeDiff);
+            await this.sendBugfixRequest(loadingMessage, log, includeDiff);
         } catch (error) {
             console.error('Bug 修复分析失败:', error);
             if (loadingMessage) {
@@ -1880,7 +1880,7 @@ class SuperBizAgentApp {
             }
         } finally {
             this.isStreaming = false;
-            this.currentAIOpsMessage = null;
+            this.currentBugfixMessage = null;
             this.updateUI();
         }
     }
@@ -1955,5 +1955,5 @@ document.head.appendChild(style);
 
 // 初始化应用
 document.addEventListener('DOMContentLoaded', () => {
-    new SuperBizAgentApp();
+    new DevPilotApp();
 });

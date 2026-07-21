@@ -19,7 +19,7 @@ Python 异常堆栈
   -> Replanner 生成根因、修改建议、风险和测试建议
 ```
 
-其中 Planner、Executor、Replanner 仍然遵循原有 AIOps 的 Plan-Execute-Replan 思路，但执行器不再让模型自由选择系统工具，而是只运行固定的只读步骤。
+其中 Planner、Executor、Replanner 复用了早期诊断流程中的 Plan-Execute-Replan 思路，但执行器不再让模型自由选择系统工具，而是只运行固定的只读步骤。
 
 ## 3. 关键模块
 

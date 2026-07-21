@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpsPilotAI</title>
+    <title>DevPilot</title>
     <link rel="stylesheet" href="/static/styles.css">
     <!-- Markdown 渲染库 -->
     <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
@@ -15,10 +15,10 @@
     <div class="app-layout">
         <aside class="sidebar">
             <div class="sidebar-header">
-                <div class="brand-mark">OP</div>
+                <div class="brand-mark">DP</div>
                 <div class="brand-copy">
-                    <h2 class="sidebar-title">OpsPilotAI</h2>
-                    <span>AI 运维工作台</span>
+                    <h2 class="sidebar-title">DevPilot</h2>
+                    <span>智能研发工作台</span>
                 </div>
             </div>
             
@@ -57,8 +57,8 @@
         <main class="main-content">
             <header class="topbar">
                 <div class="topbar-title">
-                    <span class="breadcrumb">工作台 / 智能问答</span>
-                    <h1>运维助手</h1>
+                    <span class="breadcrumb">工作台 / 研发智能问答</span>
+                    <h1>研发知识助手</h1>
                 </div>
                 <div class="topbar-actions">
                     <div class="model-chip">
@@ -94,7 +94,7 @@
             <section class="workspace">
                 <div class="chat-container">
                     <div class="welcome-greeting" id="welcomeGreeting">
-                        <span class="welcome-kicker">OpsPilotAI Console</span>
+                        <span class="welcome-kicker">DevPilot Console</span>
                         <p>你好，我可以帮你查询知识库、分析日志并生成可审查的修复建议。</p>
                     </div>
                     <div class="chat-messages" id="chatMessages">
@@ -103,7 +103,7 @@
                     <div class="chat-input-container">
                         <div class="input-group-wrapper">
                             <div class="input-wrapper">
-                                <input type="text" id="messageInput" placeholder="输入运维问题、告警现象或知识库查询" maxlength="1000" class="message-input">
+                                <input type="text" id="messageInput" placeholder="输入技术问题、错误码、日志路径或知识库查询" maxlength="1000" class="message-input">
                                 <div class="input-bottom-bar">
                                     <div class="tools-btn-wrapper">
                                         <button class="tools-btn" id="toolsBtn" title="更多选项">
@@ -250,6 +250,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=20260720-bugfix-agent"></script>
+    <script src="/static/app.js?v=20260721-devpilot-bugfix"></script>
 </body>
 </html>

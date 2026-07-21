@@ -1,13 +1,11 @@
-"""
-AIOps 请求和响应模型
-"""
+"""历史兼容诊断请求和响应模型。"""
 
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 
 class AIOpsRequest(BaseModel):
-    """AIOps 诊断请求"""
+    """兼容诊断请求"""
     
     session_id: Optional[str] = Field(
         default="default",

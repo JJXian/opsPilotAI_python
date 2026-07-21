@@ -1,6 +1,4 @@
-"""
-AIOps 智能运维接口
-"""
+"""历史兼容诊断接口。"""
 
 import json
 
@@ -18,7 +16,7 @@ router = APIRouter()
 @router.post("/aiops")
 async def diagnose_stream(request: AIOpsRequest):
     """
-    AIOps 故障诊断接口（流式 SSE）
+    历史兼容诊断接口（流式 SSE）
 
     **功能说明：**
     - 自动获取当前系统的活动告警
@@ -118,13 +116,13 @@ async def diagnose_stream(request: AIOpsRequest):
     ```
 
     Args:
-        request: AIOps 诊断请求
+        request: 兼容诊断请求
 
     Returns:
         SSE 事件流
     """
     session_id = request.session_id or "default"
-    logger.info(f"[会话 {session_id}] 收到 AIOps 诊断请求（流式）")
+    logger.info(f"[会话 {session_id}] 收到兼容诊断请求（流式）")
 
     async def event_generator():
         final_report = ""
@@ -132,7 +130,7 @@ async def diagnose_stream(request: AIOpsRequest):
             await conversation_service.add_message(
                 session_id,
                 "user",
-                "执行 AIOps 智能诊断",
+                "执行兼容诊断流程",
                 agent_type="aiops",
             )
             async for event in aiops_service.diagnose(session_id=session_id):
@@ -155,10 +153,10 @@ async def diagnose_stream(request: AIOpsRequest):
                     )
                     break
 
-            logger.info(f"[会话 {session_id}] AIOps 诊断流式响应完成")
+            logger.info(f"[会话 {session_id}] 兼容诊断流式响应完成")
 
         except Exception as e:
-            logger.error(f"[会话 {session_id}] AIOps 诊断流式响应异常: {e}", exc_info=True)
+            logger.error(f"[会话 {session_id}] 兼容诊断流式响应异常: {e}", exc_info=True)
             yield {
                 "event": "message",
                 "data": json.dumps(

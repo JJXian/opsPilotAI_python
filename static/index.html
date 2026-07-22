@@ -227,8 +227,12 @@
                 </button>
             </header>
             <div class="bugfix-panel-body">
-                <label class="bugfix-label" for="bugfixLogInput">Python 异常堆栈</label>
-                <textarea id="bugfixLogInput" class="bugfix-log-input" rows="14" placeholder="粘贴完整 Python Traceback，例如：&#10;Traceback (most recent call last):&#10;  File &quot;app/services/example.py&quot;, line 42, in run&#10;    ...&#10;ValueError: ..."></textarea>
+                <label class="bugfix-label" for="bugfixLogSource">服务器日志源（可选）</label>
+                <select id="bugfixLogSource" class="bugfix-log-source">
+                    <option value="">手动粘贴日志</option>
+                </select>
+                <label class="bugfix-label" for="bugfixLogInput">异常堆栈（Python / Spring Boot）</label>
+                <textarea id="bugfixLogInput" class="bugfix-log-input" rows="14" placeholder="粘贴完整 Python Traceback 或 Spring Boot 堆栈，例如：&#10;java.lang.IllegalStateException: ...&#10;  at com.example.order.OrderService.create(OrderService.java:42)"></textarea>
                 <label class="bugfix-diff-option">
                     <input type="checkbox" id="bugfixDiffToggle">
                     <span>生成建议 Diff（仅展示，不会修改文件）</span>

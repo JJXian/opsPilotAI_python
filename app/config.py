@@ -3,7 +3,8 @@
 使用 Pydantic Settings 实现类型安全的配置管理
 """
 
-from typing import Dict, Any
+from typing import Any
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -61,6 +62,11 @@ class Settings(BaseSettings):
     # Bug 修复 Agent：仅允许读取该目录内的源码与 Git 历史，默认是当前项目根目录。
     bugfix_repository_root: str = "."
     bugfix_max_search_results: int = 12
+    # 服务器日志源必须由部署方预先配置；接口只接受 source_id，绝不接受客户端传入的 SSH 地址或命令。
+    # 例：[{"id":"prod-api","name":"生产 API","host":"10.0.0.8","user":"ops", "log_path":"/var/log/api/error.log"}]
+    bugfix_log_sources: list[dict[str, Any]] = []
+    bugfix_log_tail_lines: int = 800
+    bugfix_log_fetch_timeout_seconds: int = 12
 
     # 文档分块配置
     chunk_max_size: int = 800
@@ -81,7 +87,7 @@ class Settings(BaseSettings):
     prometheus_request_timeout: float = 10.0
 
     @property
-    def mcp_servers(self) -> Dict[str, Dict[str, Any]]:
+    def mcp_servers(self) -> dict[str, dict[str, Any]]:
         """获取完整的 MCP 服务器配置"""
         return {
             "cls": {

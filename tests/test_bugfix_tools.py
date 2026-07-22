@@ -41,3 +41,22 @@ def test_context_reader_marks_target_line(tmp_path: Path):
 
     assert context["found"] is True
     assert ">>    2 | two" in context["snippet"]
+
+
+def test_parser_locates_spring_boot_java_stack_frame(tmp_path: Path):
+    source = tmp_path / "src" / "main" / "java" / "com" / "example" / "order" / "OrderService.java"
+    source.parent.mkdir(parents=True)
+    source.write_text("package com.example.order;\nclass OrderService {\n  void create() {}\n}\n", encoding="utf-8")
+    repository = BugFixRepository(tmp_path)
+    log = """java.lang.IllegalStateException: order is closed
+    at com.example.order.OrderService.create(OrderService.java:3)
+    at com.example.order.OrderController.create(OrderController.java:18)
+"""
+
+    parsed = repository.parse_python_traceback(log)
+
+    assert parsed["language"] == "java"
+    assert parsed["exception_type"] == "java.lang.IllegalStateException"
+    assert parsed["repository_frames"] == [
+        {"path": "src/main/java/com/example/order/OrderService.java", "line": 3, "function": "create", "in_repository": True}
+    ]

@@ -9,13 +9,19 @@ from typing import Any
 
 from app.config import config
 
-FRAME_PATTERN = re.compile(
+PYTHON_FRAME_PATTERN = re.compile(
     r'^\s*File "(?P<path>.+?)", line (?P<line>\d+), in (?P<function>.+?)\s*$', re.MULTILINE
 )
-EXCEPTION_PATTERN = re.compile(
-    r"^(?P<type>[A-Za-z_][\w.]*(?:Error|Exception|Warning|Interrupt)|AssertionError):?\s*(?P<message>.*)$"
+JAVA_FRAME_PATTERN = re.compile(
+    r"^\s*at\s+(?P<class>[\w.$]+)\.(?P<function>[\w$<>]+)\((?P<file>[\w$]+\.java):(?P<line>\d+)\)\s*$",
+    re.MULTILINE,
 )
-SOURCE_GLOBS = ("*.py", "*.toml", "*.yaml", "*.yml", "*.json", "*.ini", "*.cfg")
+EXCEPTION_PATTERN = re.compile(
+    r"^(?:Caused by:\s*)?(?P<type>[A-Za-z_][\w.$]*(?:Error|Exception|Warning|Interrupt)|AssertionError):?\s*(?P<message>.*)$"
+)
+SOURCE_GLOBS = (
+    "*.py", "*.java", "*.kt", "*.xml", "*.properties", "*.yml", "*.yaml", "*.json", "*.toml", "*.ini", "*.cfg",
+)
 
 
 class BugFixRepository:
@@ -26,8 +32,10 @@ class BugFixRepository:
         self.root = Path(configured_root).resolve()
 
     def parse_python_traceback(self, log: str) -> dict[str, Any]:
+        """兼容旧调用；同时支持 Python 与 Java/Spring Boot 异常堆栈。"""
         frames = []
-        for match in FRAME_PATTERN.finditer(log):
+        language = "python"
+        for match in PYTHON_FRAME_PATTERN.finditer(log):
             resolved = self._resolve_path(match.group("path"))
             frames.append(
                 {
@@ -37,6 +45,19 @@ class BugFixRepository:
                     "in_repository": resolved is not None and resolved.is_file(),
                 }
             )
+
+        if not frames:
+            language = "java"
+            for match in JAVA_FRAME_PATTERN.finditer(log):
+                resolved = self._resolve_java_source(match.group("class"), match.group("file"))
+                frames.append(
+                    {
+                        "path": self._display_path(resolved, match.group("file")),
+                        "line": int(match.group("line")),
+                        "function": match.group("function"),
+                        "in_repository": resolved is not None and resolved.is_file(),
+                    }
+                )
 
         exception_type = "UnknownError"
         exception_message = ""
@@ -48,11 +69,30 @@ class BugFixRepository:
                 break
 
         return {
+            "language": language,
             "exception_type": exception_type,
             "exception_message": exception_message,
             "frames": frames,
             "repository_frames": [frame for frame in frames if frame["in_repository"]],
         }
+
+    def _resolve_java_source(self, class_name: str, filename: str) -> Path | None:
+        """从 Java 包名优先定位源码，兼容标准 Maven/Gradle 目录结构。"""
+        package_path = Path(*class_name.split(".")[:-1]) / filename
+        for source_root in (self.root / "src/main/java", self.root / "src/test/java"):
+            candidate = (source_root / package_path).resolve()
+            if candidate.is_file():
+                return candidate
+        matches = list(self.root.rglob(filename))
+        for candidate in matches:
+            if any(part in {".git", ".venv", "target", "build", "node_modules"} for part in candidate.parts):
+                continue
+            try:
+                candidate.relative_to(self.root)
+                return candidate.resolve()
+            except ValueError:
+                continue
+        return None
 
     def read_context(self, path: str, line: int, radius: int = 10) -> dict[str, Any]:
         resolved = self._resolve_path(path)

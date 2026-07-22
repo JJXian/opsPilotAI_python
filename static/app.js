@@ -126,6 +126,7 @@ class DevPilotApp {
         this.bugfixModal = document.getElementById('bugfixModal');
         this.bugfixModalBackdrop = document.getElementById('bugfixModalBackdrop');
         this.bugfixLogInput = document.getElementById('bugfixLogInput');
+        this.bugfixLogSource = document.getElementById('bugfixLogSource');
         this.bugfixDiffToggle = document.getElementById('bugfixDiffToggle');
         this.closeBugfixBtn = document.getElementById('closeBugfixBtn');
         this.cancelBugfixBtn = document.getElementById('cancelBugfixBtn');
@@ -1578,11 +1579,11 @@ class DevPilotApp {
     }
 
     // 发送 Bug 修复请求（SSE 流式模式）
-    async sendBugfixRequest(loadingMessageElement, log, includeDiff) {
+    async sendBugfixRequest(loadingMessageElement, log, includeDiff, logSourceId = '') {
         const response = await fetch(`${this.apiBaseUrl}/bugfix`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session_id: this.sessionId, log, include_diff: includeDiff })
+            body: JSON.stringify({ session_id: this.sessionId, log: log || null, log_source_id: logSourceId || null, include_diff: includeDiff })
         });
         if (!response.ok) throw new Error(`HTTP错误: ${response.status}`);
 
@@ -1835,7 +1836,25 @@ class DevPilotApp {
         if (this.bugfixModal) {
             this.bugfixModal.classList.add('is-open');
             this.bugfixModal.setAttribute('aria-hidden', 'false');
+            this.loadBugfixLogSources();
             this.bugfixLogInput?.focus();
+        }
+    }
+
+    async loadBugfixLogSources() {
+        if (!this.bugfixLogSource) return;
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/bugfix/log-sources`);
+            const payload = await response.json();
+            this.bugfixLogSource.innerHTML = '<option value="">手动粘贴日志</option>';
+            (payload.sources || []).forEach((source) => {
+                const option = document.createElement('option');
+                option.value = source.id;
+                option.textContent = source.name;
+                this.bugfixLogSource.appendChild(option);
+            });
+        } catch (error) {
+            console.warn('加载服务器日志源失败:', error);
         }
     }
 
@@ -1854,8 +1873,9 @@ class DevPilotApp {
         }
 
         const log = this.bugfixLogInput?.value.trim() || '';
-        if (log.length < 20) {
-            this.showNotification('请粘贴完整的 Python 异常堆栈', 'warning');
+        const logSourceId = this.bugfixLogSource?.value || '';
+        if (!logSourceId && log.length < 20) {
+            this.showNotification('请粘贴完整的异常堆栈，或选择服务器日志源', 'warning');
             return;
         }
         const includeDiff = Boolean(this.bugfixDiffToggle?.checked);
@@ -1869,7 +1889,7 @@ class DevPilotApp {
         this.updateUI();
 
         try {
-            await this.sendBugfixRequest(loadingMessage, log, includeDiff);
+            await this.sendBugfixRequest(loadingMessage, logSourceId ? '' : log, includeDiff, logSourceId);
         } catch (error) {
             console.error('Bug 修复分析失败:', error);
             if (loadingMessage) {

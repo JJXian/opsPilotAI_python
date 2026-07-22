@@ -1273,6 +1273,16 @@ button {
     line-height: 1.55;
 }
 
+.bugfix-log-source {
+    width: 100%;
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    background: var(--bg-soft);
+    color: var(--text);
+}
+
 .bugfix-log-input:focus {
     outline: 3px solid rgba(64, 158, 255, 0.2);
     border-color: var(--primary);

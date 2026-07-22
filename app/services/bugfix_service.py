@@ -90,7 +90,7 @@ class BugFixService:
                 "trace": [
                     self._trace(
                         "parse",
-                        "已解析异常，但未找到当前项目内的 Python 堆栈帧",
+                        "已解析异常，但未找到当前项目内的堆栈帧",
                         exception_type=parsed_error["exception_type"],
                         frame_count=len(parsed_error["frames"]),
                     )
@@ -109,7 +109,7 @@ class BugFixService:
             "trace": [
                 self._trace(
                     "parse",
-                    f"已解析 {parsed_error['exception_type']}，定位到 {len(frames)} 个项目内堆栈帧",
+                    f"已解析 {parsed_error['language']} 异常 {parsed_error['exception_type']}，定位到 {len(frames)} 个项目内堆栈帧",
                     exception_type=parsed_error["exception_type"],
                     exception_message=parsed_error["exception_message"],
                     frames=frames,
@@ -219,7 +219,7 @@ class BugFixService:
             if state.get("include_diff", False)
             else "proposed_diff 保持空字符串。"
         )
-        prompt = f"""你是资深 Python 代码审查者。基于以下异常堆栈和只读代码证据生成修复建议。
+        prompt = f"""你是资深后端代码审查者。基于以下异常堆栈和只读代码证据生成修复建议。日志语言为 {parsed_error['language']}，可能来自 Python 或 Spring Boot/Java。
 禁止声称已经修改文件、执行命令或验证测试。所有引用必须使用证据中存在的 `path:line`。
 堆栈的 `path:line` 仅表示异常发生时的调用位置；只有上下文 snippet 明确支持时才能断言该行的具体逻辑或根因。
 若堆栈行与 snippet 不一致，必须写入 uncertainties，不能将错误信息直接当成代码事实。未知信息必须写入 uncertainties。{diff_instruction}

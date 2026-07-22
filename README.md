@@ -10,7 +10,7 @@
 
 - **RAG 智能问答**：支持文档上传、自动切分、Embedding 向量化、Milvus 索引、上下文组装和回答来源引用。
 - **混合检索增强**：实现 Dense Retrieval + BM25、RRF 排名融合与可配置 Reranker 精排，提升错误码、日志路径、配置项等精确标识符检索效果。
-- **Bugfix Agent**：基于 Plan-Execute-Replan 工作流，从 Python 异常堆栈出发，自动解析日志、定位代码、读取上下文、搜索相关源码并生成修复建议。
+- **Bugfix Agent**：基于 Plan-Execute-Replan 工作流，从 Python 或 Spring Boot/Java 异常堆栈出发，自动解析日志、定位代码、读取上下文、搜索相关源码并生成修复建议。
 - **智能对话体验**：支持 ReAct 风格工具调用、知识库优先模式、多轮上下文管理、异常容错和 SSE 流式输出。
 - **持久化记忆**：使用 PostgreSQL 保存会话、消息和摘要记忆，使用 LangGraph Checkpointer 持久化 Agent 执行状态。
 - **兼容诊断工具**：保留日志、监控和历史 AIOps 诊断相关接口，用于兼容既有排障流程；当前项目主定位为研发知识库问答与 Bugfix Agent。
@@ -102,6 +102,8 @@ CHUNK_OVERLAP=100
 # Bugfix Agent
 BUGFIX_REPOSITORY_ROOT=.
 BUGFIX_MAX_SEARCH_RESULTS=12
+# 可选：服务器日志源白名单。服务进程通过既有 SSH Agent/密钥认证连接，客户端不会传入 SSH 地址或命令。
+BUGFIX_LOG_SOURCES=[{"id":"prod-api","name":"生产 API","host":"10.0.0.8","user":"ops","log_path":"/var/log/api/error.log","tail_lines":800}]
 ```
 
 ## API 接口
@@ -110,7 +112,8 @@ BUGFIX_MAX_SEARCH_RESULTS=12
 |------|------|------|------|
 | 普通对话 | POST | `/api/chat` | 一次性返回 RAG 问答结果 |
 | 流式对话 | POST | `/api/chat_stream` | SSE 流式输出 |
-| Bugfix Agent | POST | `/api/bugfix` | 根据 Python 异常堆栈生成定位与修复建议 |
+| Bugfix Agent | POST | `/api/bugfix` | 根据异常堆栈或预配置服务器日志生成定位与修复建议 |
+| Bugfix 日志源 | GET | `/api/bugfix/log-sources` | 获取可选择的服务器日志源（不泄露地址与路径） |
 | 文件上传 | POST | `/api/upload` | 上传文档并建立知识库索引 |
 | 知识库文档 | GET | `/api/documents` | 获取已索引文档列表 |
 | 会话列表 | GET | `/api/chat/sessions` | 分页获取持久化会话 |
@@ -155,6 +158,18 @@ Bugfix Agent 输出包含：
 - Git 与测试文件线索
 - 根因分析、影响范围和修复建议
 - 可选建议 Diff，默认只展示，不会修改文件
+
+### 从服务器自动读取日志
+
+在 `.env` 中配置 `BUGFIX_LOG_SOURCES` 后，Bugfix 面板可选择日志源；Agent 会以服务进程已有的 SSH 凭据只读执行 `tail`，再继续原有的解析、定位、读上下文、搜索源码、根因分析和修复建议流程。也可以直接调用：
+
+```bash
+curl -N -X POST "http://localhost:9900/api/bugfix" \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"bugfix-prod","log_source_id":"prod-api","include_diff":true}'
+```
+
+日志源只能在服务端白名单中配置；接口不接受任意主机、路径、Shell 命令或写入操作。建议为该 SSH 账号授予目标日志文件的最小只读权限。
 
 ## RAG 离线评测
 

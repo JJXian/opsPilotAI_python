@@ -171,6 +171,22 @@ curl -N -X POST "http://localhost:9900/api/bugfix" \
 
 日志源只能在服务端白名单中配置；接口不接受任意主机、路径、Shell 命令或写入操作。建议为该 SSH 账号授予目标日志文件的最小只读权限。
 
+### 知识库文档版本
+
+上传、覆盖更新和重新索引均采用不可变版本：文件先写入 `uploads/staging`，完成解析、分块和向量写入后，才在 PostgreSQL 中切换 `active_version_id`。检索和 BM25 刷新只使用 active version，因此构建失败不会影响当前线上知识。
+
+- SHA-256 相同的上传会返回已存在的 active 文档，不会重复生成向量；
+- 历史版本文件与向量会保留，可通过版本接口回滚；
+- 删除先将文档标记为 deleted，使其立即从检索可见集合排除，再清理各版本向量和物理文件。
+
+```bash
+# 查看版本历史
+curl "http://localhost:9900/api/knowledge/documents/runbook.md/versions"
+
+# 切换到历史版本（version_id 从上一个接口取得）
+curl -X POST "http://localhost:9900/api/knowledge/documents/runbook.md/rollback/<version_id>"
+```
+
 ## RAG 离线评测
 
 项目内置离线检索评测流程，用于对比纯向量检索与 Hybrid RAG（BM25 + Embedding + RRF）。评测使用来源文件名作为稳定相关文档 ID，重新上传或重建索引后仍可复现。

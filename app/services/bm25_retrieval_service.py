@@ -100,9 +100,16 @@ class Bm25RetrievalService:
             for index in ranked_indexes[:top_k]
             # 小语料中单词的 BM25 IDF 可能为 0；只要有词项重合仍应保留候选。
             if query_token_set.intersection(token_sets[index])
+            and self._is_retrievable(documents[index].metadata)
         ]
         logger.info(f"BM25 召回完成: query='{query}', 结果数={len(results)}")
         return results
+
+    @staticmethod
+    def _is_retrievable(metadata: dict[str, Any]) -> bool:
+        from app.services.document_version_service import document_version_service
+
+        return document_version_service.is_active_version(metadata)
 
 
 bm25_retrieval_service = Bm25RetrievalService()

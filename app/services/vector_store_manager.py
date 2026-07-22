@@ -1,7 +1,8 @@
 """向量存储管理器 - 封装 Milvus VectorStore 操作"""
 
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator, List
+from typing import Any
 
 from langchain_core.documents import Document
 from langchain_milvus import Milvus
@@ -10,7 +11,6 @@ from loguru import logger
 from app.config import config
 from app.core.milvus_client import milvus_manager
 from app.services.vector_embedding_service import vector_embedding_service
-
 
 # 统一使用 biz collection
 COLLECTION_NAME = "biz"
@@ -61,7 +61,7 @@ class VectorStoreManager:
             logger.error(f"VectorStore 初始化失败: {e}")
             raise
 
-    def add_documents(self, documents: List[Document]) -> List[str]:
+    def add_documents(self, documents: list[Document]) -> list[str]:
         """
         批量添加文档到向量存储（自动批量向量化）
 
@@ -106,19 +106,30 @@ class VectorStoreManager:
         try:
             # 使用 milvus_manager 获取已连接的 collection
             collection = milvus_manager.get_collection()
-            
+
             # metadata 是 JSON 字段，使用 JSON 路径查询语法
             # _source 是文档的来源文件路径
             expr = f'metadata["_source"] == "{file_path}"'
-            
+
             result = collection.delete(expr)
             deleted_count = result.delete_count if hasattr(result, "delete_count") else 0
-            
+
             logger.info(f"删除文件旧数据: {file_path}, 删除数量: {deleted_count}")
             return deleted_count
-            
+
         except Exception as e:
             logger.warning(f"删除旧数据失败 (可能是首次索引): {e}")
+            if ignore_errors:
+                return 0
+            raise
+
+    def delete_by_version(self, version_id: str, *, ignore_errors: bool = True) -> int:
+        """删除指定不可变版本的所有向量分片。"""
+        try:
+            collection = milvus_manager.get_collection()
+            result = collection.delete(f'metadata["_version_id"] == "{version_id}"')
+            return result.delete_count if hasattr(result, "delete_count") else 0
+        except Exception:
             if ignore_errors:
                 return 0
             raise
@@ -159,18 +170,26 @@ class VectorStoreManager:
                     chunk_id = entity.get("id")
                     content = entity.get("content")
                     metadata = entity.get("metadata") or {}
-                    if chunk_id and content and isinstance(metadata, dict):
+                    if chunk_id and content and isinstance(metadata, dict) and self._is_retrievable(metadata):
                         chunks.append((str(chunk_id), str(content), metadata))
         finally:
             iterator.close()
 
         return chunks
 
+    @staticmethod
+    def _is_retrievable(metadata: dict[str, Any]) -> bool:
+        from app.services.document_version_service import document_version_service
+
+        return document_version_service.is_active_version(metadata)
+
     def list_indexed_documents(self) -> list[dict[str, Any]]:
         """按源文件聚合已入库分片，返回知识库管理页需要的索引信息。"""
         documents: dict[str, dict[str, Any]] = {}
 
         for metadata in self._iter_document_metadata():
+            if not self._is_retrievable(metadata):
+                continue
             source = metadata.get("_source")
             if not source:
                 continue
@@ -221,7 +240,7 @@ class VectorStoreManager:
         """
         return self.vector_store
 
-    def similarity_search(self, query: str, k: int = 3) -> List[Document]:
+    def similarity_search(self, query: str, k: int = 3) -> list[Document]:
         """
         相似度搜索
 
@@ -233,7 +252,7 @@ class VectorStoreManager:
             List[Document]: 相关文档列表
         """
         try:
-            docs = self.vector_store.similarity_search(query, k=k)
+            docs = [doc for doc in self.vector_store.similarity_search(query, k=k * 4) if self._is_retrievable(doc.metadata)][:k]
             logger.debug(f"相似度搜索完成: query='{query}', 结果数={len(docs)}")
             return docs
         except Exception as e:

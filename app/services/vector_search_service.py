@@ -1,11 +1,12 @@
 """向量检索服务模块"""
 
-from typing import Any, Dict, List
+from typing import Any
 
 from loguru import logger
 from pymilvus import Collection
 
 from app.core.milvus_client import milvus_manager
+from app.services.document_version_service import document_version_service
 from app.services.vector_embedding_service import vector_embedding_service
 
 
@@ -17,14 +18,14 @@ class SearchResult:
         id: str,
         content: str,
         score: float,
-        metadata: Dict[str, Any],
+        metadata: dict[str, Any],
     ):
         self.id = id
         self.content = content
         self.score = score
         self.metadata = metadata
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
             "id": self.id,
@@ -41,7 +42,7 @@ class VectorSearchService:
         """初始化向量检索服务"""
         logger.info("向量检索服务初始化完成")
 
-    def search_similar_documents(self, query: str, top_k: int = 3) -> List[SearchResult]:
+    def search_similar_documents(self, query: str, top_k: int = 3) -> list[SearchResult]:
         """
         搜索相似文档
 
@@ -76,7 +77,7 @@ class VectorSearchService:
                 data=[query_vector],
                 anns_field="vector",
                 param=search_params,
-                limit=top_k,
+                limit=top_k * 4,
                 output_fields=["id", "content", "metadata"],
             )
 
@@ -90,7 +91,10 @@ class VectorSearchService:
                         score=hit.distance,  # L2 距离，越小越相似
                         metadata=hit.entity.get("metadata", {}),
                     )
-                    search_results.append(result)
+                    if document_version_service.is_active_version(result.metadata):
+                        search_results.append(result)
+                    if len(search_results) >= top_k:
+                        break
 
             logger.info(f"搜索完成, 找到 {len(search_results)} 个相似文档")
             return search_results

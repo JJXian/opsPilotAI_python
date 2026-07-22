@@ -21,6 +21,7 @@ from app.services.agentic_rag_service import agentic_rag_service
 from app.services.aiops_service import aiops_service
 from app.services.bm25_retrieval_service import bm25_retrieval_service
 from app.services.bugfix_service import bugfix_service
+from app.services.document_version_service import document_version_service
 from app.services.rag_agent_service import rag_agent_service
 
 
@@ -41,6 +42,7 @@ async def lifespan(app: FastAPI):
     agentic_rag_service.configure_checkpointer(checkpointer)
     aiops_service.configure_checkpointer(checkpointer)
     bugfix_service.configure_checkpointer(checkpointer)
+    await document_version_service.refresh_active_versions()
     logger.info("✅ 会话记忆与 Agent Checkpointer 已持久化到 PostgreSQL")
 
     # 连接 Milvus

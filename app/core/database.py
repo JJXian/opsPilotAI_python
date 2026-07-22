@@ -54,6 +54,42 @@ SCHEMA_STATEMENTS = (
     CREATE INDEX IF NOT EXISTS idx_agent_audit_logs_session_created_at
     ON agent_audit_logs (session_id, created_at ASC)
     """,
+    """
+    CREATE TABLE IF NOT EXISTS knowledge_documents (
+        document_id TEXT PRIMARY KEY,
+        logical_path TEXT NOT NULL UNIQUE,
+        active_version_id TEXT,
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS knowledge_document_versions (
+        version_id TEXT PRIMARY KEY,
+        document_id TEXT NOT NULL REFERENCES knowledge_documents(document_id) ON DELETE CASCADE,
+        version_number INTEGER NOT NULL,
+        content_hash TEXT NOT NULL,
+        storage_path TEXT NOT NULL,
+        file_name TEXT NOT NULL,
+        extension TEXT NOT NULL,
+        size_bytes BIGINT NOT NULL,
+        chunk_count INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'processing',
+        error_message TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        ready_at TIMESTAMPTZ,
+        UNIQUE (document_id, version_number)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_knowledge_document_versions_document_status
+    ON knowledge_document_versions (document_id, status)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_knowledge_document_versions_content_hash
+    ON knowledge_document_versions (content_hash)
+    """,
 )
 
 

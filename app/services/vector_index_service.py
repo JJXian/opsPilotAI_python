@@ -2,12 +2,12 @@
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 from loguru import logger
 
-from app.services.document_splitter_service import document_splitter_service
 from app.services.bm25_retrieval_service import bm25_retrieval_service
+from app.services.document_splitter_service import document_splitter_service
 from app.services.vector_store_manager import vector_store_manager
 
 SUPPORTED_FILE_SUFFIXES = {".txt", ".md", ".docx", ".pdf", ".xlsx"}
@@ -22,10 +22,10 @@ class IndexingResult:
         self.total_files = 0
         self.success_count = 0
         self.fail_count = 0
-        self.start_time: Optional[datetime] = None
-        self.end_time: Optional[datetime] = None
+        self.start_time: datetime | None = None
+        self.end_time: datetime | None = None
         self.error_message = ""
-        self.failed_files: Dict[str, str] = {}
+        self.failed_files: dict[str, str] = {}
 
     def increment_success_count(self):
         """增加成功计数"""
@@ -45,7 +45,7 @@ class IndexingResult:
             return int((self.end_time - self.start_time).total_seconds() * 1000)
         return 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典"""
         return {
             "success": self.success,
@@ -67,7 +67,7 @@ class VectorIndexService:
         self.upload_path = "./uploads"
         logger.info("向量索引服务初始化完成")
 
-    def index_directory(self, directory_path: Optional[str] = None) -> IndexingResult:
+    def index_directory(self, directory_path: str | None = None) -> IndexingResult:
         """
         索引指定目录下的所有文件
 
@@ -156,16 +156,7 @@ class VectorIndexService:
         try:
             # 1. 先读取并分割新文件。解析失败时保留原有索引，避免覆盖更新后知识库为空。
             normalized_path = path.as_posix()
-            if path.suffix.lower() == ".docx":
-                documents = document_splitter_service.split_docx(normalized_path)
-            elif path.suffix.lower() == ".pdf":
-                documents = document_splitter_service.split_pdf(normalized_path)
-            elif path.suffix.lower() == ".xlsx":
-                documents = document_splitter_service.split_xlsx(normalized_path)
-            else:
-                content = path.read_text(encoding="utf-8")
-                logger.info(f"读取文件: {path}, 内容长度: {len(content)} 字符")
-                documents = document_splitter_service.split_document(content, normalized_path)
+            documents = self.prepare_documents(path)
             logger.info(f"文档分割完成: {file_path} -> {len(documents)} 个分片")
 
             # 2. 新内容已验证可解析后，再替换该源文件的旧向量。
@@ -180,6 +171,38 @@ class VectorIndexService:
         except Exception as e:
             logger.error(f"索引文件失败: {file_path}, 错误: {e}")
             raise RuntimeError(f"索引文件失败: {e}") from e
+
+    def prepare_documents(self, path: Path):
+        """解析和分块但不写入向量库，供版本化上传在切换前进行完整校验。"""
+        normalized_path = path.resolve().as_posix()
+        if path.suffix.lower() == ".docx":
+            return document_splitter_service.split_docx(normalized_path)
+        if path.suffix.lower() == ".pdf":
+            return document_splitter_service.split_pdf(normalized_path)
+        if path.suffix.lower() == ".xlsx":
+            return document_splitter_service.split_xlsx(normalized_path)
+        content = path.read_text(encoding="utf-8")
+        logger.info(f"读取文件: {path}, 内容长度: {len(content)} 字符")
+        return document_splitter_service.split_document(content, normalized_path)
+
+    def index_version(self, file_path: str, *, document_id: str, version_id: str, logical_path: str) -> int:
+        """将一个不可变版本写入向量库；调用方完成数据库 active-version 切换。"""
+        documents = self.prepare_documents(Path(file_path))
+        if not documents:
+            raise ValueError("文档内容为空或无法分割，拒绝激活该版本")
+        for chunk_index, document in enumerate(documents):
+            document.metadata.update(
+                {
+                    "_source": logical_path,
+                    "_document_id": document_id,
+                    "_version_id": version_id,
+                    "_logical_path": logical_path,
+                    "_chunk_index": chunk_index,
+                }
+            )
+        vector_store_manager.add_documents(documents)
+        logger.info(f"已写入待激活文档版本: version={version_id}, chunks={len(documents)}")
+        return len(documents)
 
 
 # 全局单例

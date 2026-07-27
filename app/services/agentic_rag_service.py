@@ -315,6 +315,42 @@ class AgenticRagService:
                 raise RuntimeError(str(event["data"]))
         return result
 
+    async def query_for_evaluation(
+        self, question: str, session_id: str, force_rag: bool = True
+    ) -> dict[str, Any]:
+        """执行真实工作流，并返回仅供离线评测使用的证据与来源。"""
+        request_id = str(uuid4())
+        state = await self.graph.ainvoke(
+            {
+                "question": question,
+                "session_id": session_id,
+                "force_rag": force_rag,
+                "trace": [],
+            },
+            config={
+                "configurable": {
+                    "thread_id": f"agentic-rag-eval:{session_id}:{request_id}"
+                }
+            },
+        )
+        documents = state.get("documents", [])
+        return {
+            "answer": state.get("answer", ""),
+            "trace": state.get("trace", []),
+            "retrieval_attempts": state.get("attempt", 0),
+            # 裁判必须同时看到正文和来源标记，否则无法判断引用是否真的支持结论。
+            "retrieved_contexts": [format_docs([document]) for document in documents],
+            "retrieved_sources": [
+                str(
+                    document.metadata.get("_file_name")
+                    or document.metadata.get("_source")
+                    or document.metadata.get("_chunk_id")
+                    or "未知来源"
+                )
+                for document in documents
+            ],
+        }
+
     async def clear_checkpoint(self, session_id: str) -> None:
         # 每轮请求使用独立 thread_id；聊天正文由 PostgreSQL 会话表管理。
         return None

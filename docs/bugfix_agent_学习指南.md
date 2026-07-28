@@ -1,90 +1,119 @@
-# Bug 修复 Agent 学习指南
+# 动态 Bugfix Agent 学习指南
 
-## 1. 它解决什么问题
+## 1. 目标
 
-Bug 修复 Agent 面向研发排障：用户粘贴 Python Traceback 后，系统从日志中的文件、行号和函数名出发，在当前项目内读取代码、搜索相关实现、查看 Git 历史和测试，再生成一份可审查的修复建议。
+Bugfix Agent 不再执行固定四步模板。它把一次故障建模为稳定的 Incident，并在服务端
+安全边界内动态收集证据、修正假设、增删步骤，最后输出带终止原因的修复建议。
 
-它默认是只读的：不会修改项目文件、运行测试命令、创建分支或提交 PR。即使用户勾选“生成建议 Diff”，也只会返回文本草案。
-
-## 2. 工作流
+## 2. 状态机
 
 ```text
-Python 异常堆栈
-  -> Planner 解析异常类型、文件、行号、函数
-  -> Executor 读取异常帧附近代码
-  -> Replanner 判断是否继续收集证据
-  -> Executor 搜索源码与配置
-  -> Executor 读取 Git 历史并发现相关测试
-  -> Executor 汇总可确认事实与不确定项
-  -> Replanner 生成根因、修改建议、风险和测试建议
+Planner
+  -> Executor
+      -> Approval interrupt（仅高风险步骤）
+      -> Replanner
+          -> Executor（继续或替换计划）
+          -> Report（证据充分、预算耗尽、超时或需要补充信息）
 ```
 
-其中 Planner、Executor、Replanner 复用了早期诊断流程中的 Plan-Execute-Replan 思路，但执行器不再让模型自由选择系统工具，而是只运行固定的只读步骤。
+Planner 输入异常类型、服务语言、仓库堆栈帧和原始日志，输出 `PlannedStep` 列表。每一步
+只能引用服务端注册的工具。Replanner 每轮读取新增证据和剩余计划，可以：
 
-## 3. 关键模块
+- `continue`：保留剩余计划；
+- `replace`：删除无效步骤并增加新的证据收集步骤；
+- `finish`：证据充分，提前生成报告；
+- `clarify`：缺少只能由用户提供的信息，停止并提出具体问题。
 
-| 文件 | 作用 |
-| --- | --- |
-| `app/api/bugfix.py` | `POST /api/bugfix` 的 SSE 接口 |
-| `app/models/bugfix.py` | 堆栈、会话 ID、建议 Diff 选项的请求模型 |
-| `app/services/bugfix_service.py` | Planner、Executor、Replanner 状态图和报告生成 |
-| `app/services/bugfix_tools.py` | 路径隔离、堆栈解析、代码读取、源码搜索、Git 与测试发现 |
-| `static/index.html`、`static/app.js` | “Bug 修复”按钮、堆栈输入面板和流式步骤展示 |
+## 3. 受控工具
 
-## 4. 安全边界
+| 工具 | 风险 | 行为 |
+| --- | --- | --- |
+| `analyze_logs` | low | 解析异常和关键错误行 |
+| `inspect_frames` | low | 读取仓库内堆栈帧上下文 |
+| `search_code` | low | 在受控文件类型中搜索源码和配置 |
+| `inspect_git` | low | 读取相关文件提交历史 |
+| `inspect_releases` | low | 读取最近标签、提交时间和发布线索 |
+| `inspect_metrics` | medium | 查询固定 Prometheus 地址的当前告警 |
+| `find_tests` | low | 自动发现相关测试 |
+| `run_tests` | high | 只运行自动发现的测试，必须人工审批 |
+| `verify` | low | 汇总已确认事实、冲突和证据缺口 |
 
-`bugfix_repository_root` 默认是项目当前目录。所有堆栈路径都会先被解析并校验：只有位于该目录内的文件才允许读取；`../../` 等越界路径会被拒绝。
+风险等级来自服务端注册表，不能由 Planner 修改。工具不接受任意 Shell、主机、路径或测试
+参数。
 
-允许的动作：
+## 4. 失控防护
 
-- 读取源码上下文。
-- 用 `rg` 搜索源码与配置。
-- 读取 `git log` 历史。
-- 查找 `tests/` 下名称关联的测试文件。
+- 最大执行步骤：`BUGFIX_MAX_STEPS`，默认 8；
+- 估算 Token 预算：`BUGFIX_TOKEN_BUDGET`，默认 12000；
+- Incident 超时：`BUGFIX_TIMEOUT_SECONDS`，默认 120 秒；
+- 可重试读取工具：`BUGFIX_TOOL_RETRY_ATTEMPTS`，默认 2 次；
+- 工具超时：`BUGFIX_TOOL_TIMEOUT_SECONDS`，默认 20 秒；
+- 终止原因：`completed`、`evidence_sufficient`、`max_steps`、`token_budget`、
+  `timeout`、`needs_human_input`、`human_rejected` 或 `no_actionable_plan`。
 
-禁止的动作：
+每次工具调用根据 `incident_id + tool + 受控参数` 生成 SHA-256 幂等键。工具结果保存在
+LangGraph 状态中；服务重启后，PostgreSQL Checkpointer 能恢复计划、证据、缓存和审批
+状态。
 
-- 写入、删除或重命名文件。
-- 执行测试、部署、重启或 Git 写操作。
-- 接受用户指定的任意服务器文件系统路径。
+## 5. Human-in-the-loop
 
-## 5. 如何使用
+高风险步骤进入 LangGraph `interrupt`，在审批前不会执行。SSE 会返回：
 
-1. 打开页面后点击右上角“Bug 修复”。
-2. 粘贴完整 Python Traceback，至少应包含 `File "...", line N, in ...` 和最后的异常行。
-3. 默认点击“开始定位”。需要查看补丁草案时，再勾选“生成建议 Diff”。
-4. 等待报告生成。页面会显示执行计划和每一步完成状态，最终报告包含：疑似根因、代码证据、修改建议、风险、测试建议和不确定项。
+```json
+{
+  "type": "approval_required",
+  "data": {
+    "incident_id": "INC-2026-001",
+    "step_id": "run-tests",
+    "tool": "run_tests",
+    "risk": "high"
+  }
+}
+```
 
-也可以直接调用接口：
+批准后使用同一个 Incident 恢复：
 
 ```bash
-curl -N -X POST http://127.0.0.1:9901/api/bugfix \
+curl -N -X POST http://127.0.0.1:9900/api/bugfix \
   -H 'Content-Type: application/json' \
   -d '{
-    "session_id": "demo",
-    "log": "Traceback (most recent call last):\\n  File \\"app/example.py\\", line 12, in run\\n    ...\\nValueError: invalid input",
+    "session_id": "bugfix-demo",
+    "incident_id": "INC-2026-001",
+    "approval": {
+      "approved": true,
+      "reason": "允许执行自动发现的白名单测试"
+    }
+  }'
+```
+
+拒绝时 Replanner 会删除该高风险步骤，并根据剩余证据决定继续诊断还是输出报告。
+
+## 6. 断点恢复
+
+首次请求应指定稳定的 `incident_id`：
+
+```bash
+curl -N -X POST http://127.0.0.1:9900/api/bugfix \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "session_id": "bugfix-demo",
+    "incident_id": "INC-2026-001",
+    "log": "Traceback ...",
     "include_diff": false
   }'
 ```
 
-## 6. 如何验证
+图使用 `bugfix:<incident_id>` 作为 thread_id，而不是每次生成随机 ID。重复提交已完成的
+Incident 会返回缓存报告；节点异常或服务重启后会从 Checkpointer 的下一节点继续。
 
-使用项目内真实文件路径构造一段示例堆栈，例如：
+状态查询：
 
-```text
-Traceback (most recent call last):
-  File "app/services/bugfix_service.py", line 196, in _execute_step
-    raise ValueError(f"未知诊断步骤: {kind}")
-ValueError: 未知诊断步骤: invalid
+```bash
+curl http://127.0.0.1:9900/api/bugfix/incidents/INC-2026-001
 ```
 
-预期结果：
+## 7. 面试时应准确说明
 
-- 执行过程显示四步只读诊断计划。
-- 报告中的“代码证据”包含 `app/services/bugfix_service.py:196`。
-- “执行边界”明确写明未修改文件、未执行修复命令。
-- PostgreSQL `agent_audit_logs` 表出现 `bugfix_parse`、`bugfix_execute`、`bugfix_report` 等事件。
-
-## 7. 后续演进
-
-下一阶段可以接入 GitHub/GitLab，在人工确认后创建临时分支、应用建议 Diff、运行白名单测试并创建 Draft PR。这个阶段应继续保持“确认前只读”的边界，并为每一次写操作保存审计记录。
+Planner 和 Replanner 是 LLM 决策，但执行权限不属于 LLM。模型只能提出结构化步骤，
+服务端负责工具白名单、风险等级、参数构造、预算、幂等、重试、缓存和审批。这样既保留
+动态诊断能力，也避免模型获得任意代码执行或生产变更权限。

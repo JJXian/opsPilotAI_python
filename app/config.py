@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # DashScope 配置
     dashscope_api_key: str = ""  # 默认空字符串，实际使用需从环境变量加载
-    dashscope_model: str = "qwen-max"
+    dashscope_model: str = "qwen3.7-plus"
     dashscope_embedding_model: str = "text-embedding-v4"  # v4 支持多种维度（默认 1024）
 
     # Milvus 配置
@@ -48,7 +48,7 @@ class Settings(BaseSettings):
 
     # RAG 配置
     rag_top_k: int = 3  # 兼容旧配置，新的混合检索使用下列分阶段参数
-    rag_model: str = "qwen-max"  # 使用快速响应模型，不带扩展思考
+    rag_model: str = "qwen3.7-plus"  # 对话、RAG、Agent 与评测统一使用的主模型
     rag_dense_top_k: int = 10
     rag_bm25_top_k: int = 5
     rag_fusion_top_k: int = 8
@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     # Bug 修复 Agent：仅允许读取该目录内的源码与 Git 历史，默认是当前项目根目录。
     bugfix_repository_root: str = "."
     bugfix_max_search_results: int = 12
+    bugfix_max_steps: int = 8
+    bugfix_token_budget: int = 12000
+    bugfix_timeout_seconds: int = 120
+    bugfix_tool_retry_attempts: int = 2
+    bugfix_tool_timeout_seconds: int = 20
     # 服务器日志源必须由部署方预先配置；接口只接受 source_id，绝不接受客户端传入的 SSH 地址或命令。
     # 例：[{"id":"prod-api","name":"生产 API","host":"10.0.0.8","user":"ops", "log_path":"/var/log/api/error.log"}]
     bugfix_log_sources: list[dict[str, Any]] = []

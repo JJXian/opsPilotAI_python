@@ -1579,11 +1579,20 @@ class DevPilotApp {
     }
 
     // 发送 Bug 修复请求（SSE 流式模式）
-    async sendBugfixRequest(loadingMessageElement, log, includeDiff, logSourceId = '') {
+    async sendBugfixRequest(loadingMessageElement, log, includeDiff, logSourceId = '', incidentId = '', approval = null) {
+        const requestBody = approval
+            ? { session_id: this.sessionId, incident_id: incidentId, approval }
+            : {
+                session_id: this.sessionId,
+                incident_id: incidentId,
+                log: log || null,
+                log_source_id: logSourceId || null,
+                include_diff: includeDiff
+            };
         const response = await fetch(`${this.apiBaseUrl}/bugfix`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session_id: this.sessionId, log: log || null, log_source_id: logSourceId || null, include_diff: includeDiff })
+            body: JSON.stringify(requestBody)
         });
         if (!response.ok) throw new Error(`HTTP错误: ${response.status}`);
 
@@ -1591,6 +1600,7 @@ class DevPilotApp {
         const decoder = new TextDecoder();
         let buffer = '';
         let fullResponse = '';
+        let pendingApproval = null;
         const details = [];
         try {
             while (true) {
@@ -1605,9 +1615,30 @@ class DevPilotApp {
                     if (event.type === 'trace') {
                         details.push(event.data.message);
                     } else if (event.type === 'plan') {
-                        details.push(...(event.plan || []).map((item) => item.label));
+                        details.push(...(event.plan || []).map((item) => item.objective || item.label || item.tool));
                     } else if (event.type === 'step_complete') {
                         details.push(`已完成：${event.step}`);
+                    } else if (event.type === 'approval_required') {
+                        pendingApproval = event.data || {};
+                        details.push(`等待审批：${pendingApproval.objective || pendingApproval.tool || '高风险步骤'}`);
+                    } else if (event.type === 'paused' && pendingApproval) {
+                        const approved = window.confirm(
+                            `Agent 请求执行高风险步骤：${pendingApproval.objective || pendingApproval.tool}。\n\n是否批准？`
+                        );
+                        details.push(approved ? '已批准高风险步骤，继续诊断' : '已拒绝高风险步骤，重新规划');
+                        this.updateBugfixStreamContent(loadingMessageElement, details.map((item) => `- ${item}`).join('\n'));
+                        await this.sendBugfixRequest(
+                            loadingMessageElement,
+                            '',
+                            includeDiff,
+                            '',
+                            event.incident_id || incidentId,
+                            {
+                                approved,
+                                reason: approved ? '用户在诊断界面确认执行' : '用户在诊断界面拒绝执行'
+                            }
+                        );
+                        return;
                     } else if (event.type === 'report') {
                         fullResponse = event.report || '';
                     } else if (event.type === 'complete') {
@@ -1879,6 +1910,7 @@ class DevPilotApp {
             return;
         }
         const includeDiff = Boolean(this.bugfixDiffToggle?.checked);
+        const incidentId = `incident-${crypto.randomUUID()}`;
         this.closeBugfixModal();
 
         const loadingMessage = this.addLoadingMessage('正在解析日志并定位代码...');
@@ -1889,7 +1921,13 @@ class DevPilotApp {
         this.updateUI();
 
         try {
-            await this.sendBugfixRequest(loadingMessage, logSourceId ? '' : log, includeDiff, logSourceId);
+            await this.sendBugfixRequest(
+                loadingMessage,
+                logSourceId ? '' : log,
+                includeDiff,
+                logSourceId,
+                incidentId
+            );
         } catch (error) {
             console.error('Bug 修复分析失败:', error);
             if (loadingMessage) {

@@ -10,7 +10,7 @@
 
 - **RAG 智能问答**：支持文档上传、自动切分、Embedding 向量化、Milvus 索引、上下文组装和回答来源引用。
 - **混合检索增强**：实现 Dense Retrieval + BM25、RRF 排名融合与可配置 Reranker 精排，提升错误码、日志路径、配置项等精确标识符检索效果。
-- **Bugfix Agent**：基于 Plan-Execute-Replan 工作流，从 Python 或 Spring Boot/Java 异常堆栈出发，自动解析日志、定位代码、读取上下文、搜索相关源码并生成修复建议。
+- **动态 Bugfix Agent**：Planner 根据异常类型、语言和已有证据生成结构化计划，Executor 通过受控工具读取日志、指标、源码、Git、发布记录和测试，Replanner 根据证据缺口动态增删步骤。
 - **智能对话体验**：支持 ReAct 风格工具调用、知识库优先模式、多轮上下文管理、异常容错和 SSE 流式输出。
 - **持久化记忆**：使用 PostgreSQL 保存会话、消息和摘要记忆，使用 LangGraph Checkpointer 持久化 Agent 执行状态。
 - **兼容诊断工具**：保留日志、监控和历史 AIOps 诊断相关接口，用于兼容既有排障流程；当前项目主定位为研发知识库问答与 Bugfix Agent。
@@ -85,7 +85,8 @@ notepad .env
 # DashScope
 DASHSCOPE_API_KEY=your-api-key
 DASHSCOPE_API_BASE=https://dashscope.aliyuncs.com/compatible-mode/v1
-DASHSCOPE_MODEL=qwen-max
+DASHSCOPE_MODEL=qwen3.7-plus
+RAG_MODEL=qwen3.7-plus
 
 # Milvus
 MILVUS_HOST=localhost
@@ -153,11 +154,16 @@ curl -N -X POST "http://localhost:9900/api/bugfix" \
 
 Bugfix Agent 输出包含：
 
+- 根据异常类型动态生成、可在执行中重排的结构化计划
 - 异常类型、堆栈文件、行号和函数名解析结果
-- 可疑代码片段和相关源码搜索结果
-- Git 与测试文件线索
+- 日志、指标、代码片段、Git、发布记录与测试线索
 - 根因分析、影响范围和修复建议
 - 可选建议 Diff，默认只展示，不会修改文件
+- 最大步骤数、Token 预算、超时和明确的终止原因
+- 高风险测试执行的 human-in-the-loop 审批与断点恢复
+
+建议为每次故障传入稳定的 `incident_id`。相同 Incident 会复用
+`bugfix:<incident_id>` 作为 LangGraph thread_id；重复请求不会重新执行已经完成的工具。
 
 ### 从服务器自动读取日志
 
@@ -252,17 +258,23 @@ super_biz_agent_py/
 ## Bugfix Agent 工作流
 
 ```text
-1. Parse    解析 Python Traceback，提取异常类型、文件、行号和函数名
-2. Plan     生成代码定位与证据收集计划
-3. Execute  执行只读代码工具：读取片段、搜索源码、发现测试、查看 Git 线索
-4. Replan   根据证据决定继续补充上下文或进入报告生成
-5. Report   输出根因分析、影响范围、修复建议和可选建议 Diff
+1. Parse      解析 Python/Java 异常、语言、堆栈帧和初始证据
+2. Plan       LLM 从服务端白名单工具中生成结构化动态计划
+3. Guard      检查最大步骤数、Token 预算、超时、工具风险与审批状态
+4. Execute    使用日志、指标、代码、Git、发布记录和测试工具收集证据
+5. Replan     根据证据缺口继续、替换计划、提前结束或请求补充信息
+6. Interrupt  高风险步骤暂停；人工批准后用相同 Incident 继续
+7. Report     输出根因、证据、风险、终止原因和可选建议 Diff
 ```
 
 安全边界：
 
 - 只读取 `BUGFIX_REPOSITORY_ROOT` 内的文件。
 - 拒绝 `../` 等路径越界访问。
+- 工具名、风险等级、重试能力均由服务端注册表控制，模型不能覆盖。
+- 每次工具调用生成 Incident 级幂等键，结果随 Checkpointer 持久化并支持缓存。
+- 只对可安全重试的读取工具自动重试；高风险工具不会自动重试。
+- `run_tests` 只接受自动发现的测试文件，并必须人工审批。
 - 建议 Diff 仅作为报告内容展示，不会自动写入项目文件。
 
 ## 会话记忆持久化

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -164,6 +165,38 @@ class BugFixRepository:
             if line.strip()
         ]
 
+    def release_history(self) -> list[dict[str, str]]:
+        """读取最近发布标签与提交装饰，作为版本变更证据。"""
+        command = [
+            "git",
+            "-C",
+            str(self.root),
+            "log",
+            "--all",
+            "--decorate=short",
+            "--date=iso",
+            "--pretty=format:%h%x09%ad%x09%d%x09%s",
+            "--max-count",
+            "20",
+        ]
+        try:
+            result = subprocess.run(command, capture_output=True, text=True, timeout=5, check=False)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return []
+        records = []
+        for line in result.stdout.splitlines():
+            parts = line.split("\t", 3)
+            if len(parts) == 4:
+                records.append(
+                    {
+                        "commit": parts[0],
+                        "committed_at": parts[1],
+                        "refs": parts[2],
+                        "summary": parts[3],
+                    }
+                )
+        return records
+
     def find_related_tests(self, paths: list[str]) -> list[str]:
         tests_root = self.root / "tests"
         if not tests_root.is_dir():
@@ -174,6 +207,40 @@ class BugFixRepository:
             if any(stem and stem in test_file.stem for stem in stems):
                 matches.append(str(test_file.relative_to(self.root)))
         return matches[: config.bugfix_max_search_results]
+
+    def run_related_tests(self, paths: list[str]) -> dict[str, Any]:
+        """仅运行自动发现的测试文件；不接受模型提供任意命令或参数。"""
+        tests = self.find_related_tests(paths)
+        if not tests:
+            return {"executed": False, "reason": "没有自动发现可安全执行的相关测试", "tests": []}
+        command = [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            "--disable-warnings",
+            *tests[:5],
+        ]
+        try:
+            result = subprocess.run(
+                command,
+                cwd=self.root,
+                capture_output=True,
+                text=True,
+                timeout=config.bugfix_tool_timeout_seconds,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            return {"executed": True, "timed_out": True, "tests": tests[:5]}
+        except OSError as error:
+            return {"executed": False, "reason": str(error), "tests": tests[:5]}
+        return {
+            "executed": True,
+            "return_code": result.returncode,
+            "tests": tests[:5],
+            "stdout": result.stdout[-6000:],
+            "stderr": result.stderr[-3000:],
+        }
 
     def _resolve_path(self, raw_path: str) -> Path | None:
         candidate = Path(raw_path)
